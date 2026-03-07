@@ -63,6 +63,17 @@ def get_display_text(token_text: str, model_name: str) -> str:
         return token_text
     return token_text
 
+def bytes_to_unicode_map():
+    bs = list(range(ord("!"), ord("~")+1)) + list(range(ord("¡"), ord("¬")+1)) + list(range(ord("®"), ord("ÿ")+1))
+    cs = bs[:]
+    n = 0
+    for b in range(2**8):
+        if b not in bs:
+            bs.append(b)
+            cs.append(2**8 + n)
+            n += 1
+    return dict(zip(bs, [chr(n) for n in cs]))
+
 def simulate_bpe_steps(text: str, tokenizer: GPT2Tokenizer) -> List[BPEStep]:
     """
     Simulates the BPE process step-by-step for visualization.
@@ -72,13 +83,12 @@ def simulate_bpe_steps(text: str, tokenizer: GPT2Tokenizer) -> List[BPEStep]:
         return []
 
     # First, byte encode strings into unicode chars
-    bpe_ranks = tokenizer.bpe_ranks
-    byte_encoder = tokenizer.byte_encoder
+    bpe_ranks = {pair: i for i, pair in enumerate(tokenizer._merges)} if hasattr(tokenizer, '_merges') else getattr(tokenizer, 'bpe_ranks', {})
+    byte_encoder = bytes_to_unicode_map()
     
     # Custom tokenization by regex (GPT2 regex)
+    import regex as re
     pat = re.compile(r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
-    import regex
-    pat = regex.compile(r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
     
     # For educational visualization, we'll just demonstrate the first word's merges
     # as the full string merge can be extremely verbose. We will take the longest word.
