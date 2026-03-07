@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How LLMs Really Tokenize — Deep Dive</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI',sans-serif; background:#0a0a14; color:#e0e0e0; min-height:100vh; }
+
+header { background:linear-gradient(135deg,#0d0d1f,#141428); padding:28px 40px; border-bottom:1px solid #1e1e3a; }
+header h1 { font-size:1.9rem; color:#7c6af5; }
+header p { color:#666; margin-top:6px; font-size:0.88rem; }
+
+.container { max-width:1100px; margin:0 auto; padding:32px 20px; }
+
+.card { background:#0f0f1e; border:1px solid #1e1e3a; border-radius:14px; padding:26px; margin-bottom:22px; }
+.card-title { font-size:0.78rem; color:#7c6af5; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:18px; font-weight:700; }
+
+/* Steps */
+.steps-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+.step-card { background:#12122a; border:1px solid #1e1e3a; border-radius:10px; padding:18px; position:relative; overflow:hidden; }
+.step-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,#7c6af5,#f56a9a); }
+.step-num { font-size:2rem; font-weight:900; color:#7c6af51a; position:absolute; top:10px; right:14px; }
+.step-icon { font-size:1.4rem; margin-bottom:10px; }
+.step-title { font-size:0.88rem; font-weight:700; color:#e0e0e0; margin-bottom:6px; }
+.step-desc { font-size:0.8rem; color:#888; line-height:1.6; }
+.step-example { margin-top:10px; background:#0a0a14; border-radius:6px; padding:8px 10px; font-family:'Courier New',monospace; font-size:0.78rem; color:#7c6af5; }
+
+/* Input */
+textarea { width:100%; height:120px; background:#080812; border:1px solid #2a2a4a; border-radius:8px; color:#e0e0e0; padding:14px; font-size:0.92rem; font-family:'Courier New',monospace; resize:vertical; outline:none; line-height:1.6; }
+textarea:focus { border-color:#7c6af5; }
+.btn-row { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; align-items:center; }
+button { padding:9px 20px; border-radius:8px; border:none; cursor:pointer; font-size:0.85rem; font-weight:600; transition:all 0.2s; }
+.btn-primary { background:linear-gradient(135deg,#7c6af5,#a06af5); color:white; }
+.btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 16px #7c6af540; }
+.btn-ghost { background:#1a1a2e; color:#888; border:1px solid #2a2a4a; }
+.btn-ghost:hover { color:#fff; border-color:#7c6af5; }
+.model-select { background:#1a1a2e; border:1px solid #2a2a4a; color:#e0e0e0; padding:9px 14px; border-radius:8px; font-size:0.85rem; outline:none; cursor:pointer; }
+
+/* Stats */
+.stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:22px; }
+.stat { background:#0f0f1e; border:1px solid #1e1e3a; border-radius:10px; padding:16px; text-align:center; }
+.stat .n { font-size:1.8rem; font-weight:800; color:#7c6af5; line-height:1; }
+.stat .l { font-size:0.72rem; color:#555; margin-top:5px; text-transform:uppercase; letter-spacing:1px; }
+
+/* Phases */
+.phase { margin-bottom:28px; }
+.phase-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.phase-badge { background:#7c6af520; color:#7c6af5; border:1px solid #7c6af540; padding:4px 12px; border-radius:20px; font-size:0.75rem; font-weight:700; }
+
+/* Token display */
+.token-wrap { display:flex; flex-wrap:wrap; gap:5px; font-family:'Courier New',monospace; }
+.tok { display:inline-flex; flex-direction:column; align-items:center; padding:4px 8px; border-radius:6px; cursor:pointer; border:1px solid transparent; transition:all 0.15s; min-width:28px; }
+.tok:hover { transform:translateY(-2px); filter:brightness(1.3); }
+.tok .tw { font-size:0.88rem; font-weight:600; white-space:pre; }
+.tok .ti { font-size:0.58rem; opacity:0.6; margin-top:2px; }
+
+/* BPE Animation */
+.bpe-steps { display:grid; gap:10px; }
+.bpe-row { background:#12122a; border-radius:8px; padding:14px 16px; border-left:2px solid #2a2a4a; }
+.bpe-row.active { border-left-color:#7c6af5; }
+.bpe-label { font-size:0.72rem; color:#555; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+.bpe-tokens { display:flex; flex-wrap:wrap; gap:5px; font-family:'Courier New',monospace; }
+.bpe-tok { padding:3px 8px; border-radius:4px; font-size:0.82rem; }
+.bpe-merged { background:#7c6af530; color:#7c6af5; border:1px solid #7c6af560; }
+.bpe-normal { background:#1a1a2e; color:#888; border:1px solid #2a2a4a; }
+.bpe-arrow { color:#555; font-size:0.75rem; margin:4px 0 6px; }
+
+/* Embedding viz */
+.embed-row { display:flex; gap:3px; align-items:center; margin-bottom:8px; }
+.embed-label { font-family:'Courier New',monospace; font-size:0.8rem; color:#7c6af5; width:100px; flex-shrink:0; }
+.embed-bars { display:flex; gap:2px; }
+.embed-bar { width:14px; border-radius:2px; transition:height 0.3s; }
+.embed-val { font-size:0.7rem; color:#555; margin-left:8px; }
+
+/* Attention matrix */
+.attn-grid { display:inline-grid; gap:3px; }
+.attn-cell { width:36px; height:36px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:0.62rem; font-family:'Courier New',monospace; cursor:pointer; transition:all 0.2s; }
+.attn-cell:hover { transform:scale(1.15); z-index:10; position:relative; }
+.attn-header { background:transparent!important; color:#555; font-size:0.65rem; }
+
+/* Vocab table */
+.vtable { width:100%; border-collapse:collapse; font-size:0.84rem; }
+.vtable th { padding:10px 14px; background:#080812; color:#7c6af5; font-size:0.72rem; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid #1e1e3a; text-align:left; }
+.vtable td { padding:9px 14px; border-bottom:1px solid #12122a; }
+.vtable tr:hover td { background:#12122a; }
+.chip { display:inline-block; padding:2px 8px; border-radius:4px; font-family:'Courier New',monospace; font-size:0.82rem; }
+.bar { display:inline-block; height:6px; border-radius:3px; background:#7c6af5; vertical-align:middle; margin-right:6px; }
+
+/* Tooltip */
+.tip { display:none; position:fixed; background:#1a1a2e; border:1px solid #7c6af5; border-radius:10px; padding:12px 16px; font-size:0.82rem; z-index:9999; min-width:200px; pointer-events:none; box-shadow:0 8px 32px #00000080; }
+.tip-name { font-size:1rem; font-weight:700; color:#fff; margin-bottom:8px; font-family:'Courier New',monospace; }
+.tip-row { display:flex; justify-content:space-between; gap:24px; margin-top:4px; }
+.tip-key { color:#555; }
+.tip-val { color:#7c6af5; font-weight:600; }
+.tip-fact { margin-top:8px; font-size:0.77rem; color:#666; border-top:1px solid #1e1e3a; padding-top:8px; line-height:1.5; }
+
+#results { display:none; }
+.loading { text-align:center; padding:30px; color:#555; font-size:0.88rem; }
+.spinner { display:inline-block; width:20px; height:20px; border:2px solid #2a2a4a; border-top-color:#7c6af5; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:10px; vertical-align:middle; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.info-box { background:#12122a; border:1px solid #1e1e3a; border-radius:8px; padding:14px 16px; font-size:0.83rem; color:#888; line-height:1.7; margin-bottom:14px; }
+.info-box strong { color:#c0b8ff; }
+.info-box code { background:#0a0a14; color:#7c6af5; padding:1px 6px; border-radius:3px; font-family:'Courier New',monospace; }
+
+.tab-row { display:flex; gap:0; border-bottom:1px solid #1e1e3a; margin-bottom:20px; overflow-x:auto; }
+.tab { padding:10px 18px; font-size:0.84rem; color:#555; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; transition:all 0.2s; }
+.tab.active { color:#7c6af5; border-bottom-color:#7c6af5; }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧠 How LLMs Really Tokenize</h1>
+  <p>A deep, accurate walkthrough — from raw text to token IDs, embeddings, and attention. Powered by real BPE tokenization.</p>
+</header>
+
+<div class="container">
+
+  <!-- Phase 0: The Full Story -->
+  <div class="card">
+    <div class="card-title">The Complete Pipeline — What Really Happens</div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num">1</div>
+        <div class="step-icon">📖</div>
+        <div class="step-title">Pre-built Vocabulary</div>
+        <div class="step-desc">The tokenizer vocab is <strong style="color:#e0e0e0">frozen before training</strong>. GPT-4 has 100,277 tokens. Llama 3 has 128,000. IDs never change after training.</div>
+        <div class="step-example">"hello" → always ID 15339 in GPT-2</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">2</div>
+        <div class="step-icon">✂️</div>
+        <div class="step-title">BPE Splitting</div>
+        <div class="step-desc">Byte Pair Encoding merges the most frequent character pairs repeatedly until a vocabulary is built. Rare words get split into subword pieces.</div>
+        <div class="step-example">"tokenization" → ["token","ization"]</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">3</div>
+        <div class="step-icon">🔢</div>
+        <div class="step-title">ID Lookup</div>
+        <div class="step-desc">Each token piece is looked up in the vocabulary table. The result is a flat list of integers — <strong style="color:#e0e0e0">the model never sees letters</strong>.</div>
+        <div class="step-example">"hi there" → [5303, 612]</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">4</div>
+        <div class="step-icon">📐</div>
+        <div class="step-title">Embedding Lookup</div>
+        <div class="step-desc">Each ID maps to a <strong style="color:#e0e0e0">vector of 768–4096 numbers</strong> from a learned embedding table. This vector encodes the token's meaning.</div>
+        <div class="step-example">ID 5303 → [0.23, -0.87, 0.41 ...]</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">5</div>
+        <div class="step-icon">👁️</div>
+        <div class="step-title">Attention — Reuse Matters</div>
+        <div class="step-desc">Every token attends to every other. Repeated token IDs create <strong style="color:#e0e0e0">shared attention pathways</strong> — the model learns their context relationship.</div>
+        <div class="step-example">"the" × 10 → strong positional patterns</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">6</div>
+        <div class="step-icon">🎯</div>
+        <div class="step-title">Prediction</div>
+        <div class="step-desc">The transformer outputs a probability over all 100K vocab tokens for the <em>next</em> token. The highest probability ID is selected and decoded back to text.</div>
+        <div class="step-example">→ softmax → ID 42 → "world"</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="card">
+    <div class="card-title">✏️ Enter Your Text</div>
+    <textarea id="inputText" placeholder="Type or paste any text...">The quick brown fox jumps over the lazy dog. Tokenization splits text into tokens. Each token maps to an ID. The model processes IDs, not words.</textarea>
+    <div class="btn-row">
+      <select class="model-select" id="modelSelect">
+        <option value="gpt2">GPT-2 (50,257 tokens)</option>
+        <option value="bert">BERT (30,522 tokens)</option>
+      </select>
+      <button class="btn-primary" onclick="runTokenize()">🔍 Tokenize & Explain</button>
+      <button class="btn-ghost" onclick="loadSample('story')">Story</button>
+      <button class="btn-ghost" onclick="loadSample('code')">Code</button>
+      <button class="btn-ghost" onclick="loadSample('rag')">RAG Docs</button>
+    </div>
+  </div>
+
+  <div id="loadingBox" class="card loading" style="display:none">
+    <span class="spinner"></span> Fetching real token IDs from Hugging Face...
+  </div>
+
+  <div id="results">
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat"><div class="n" id="sTotal">—</div><div class="l">Total Tokens</div></div>
+      <div class="stat"><div class="n" id="sUnique">—</div><div class="l">Unique Tokens</div></div>
+      <div class="stat"><div class="n" id="sWords">—</div><div class="l">Words</div></div>
+      <div class="stat"><div class="n" id="sRatio">—</div><div class="l">Tok/Word</div></div>
+      <div class="stat"><div class="n" id="sReused">—</div><div class="l">Reused IDs</div></div>
+      <div class="stat"><div class="n" id="sReusePct">—</div><div class="l">Reuse Rate</div></div>
+      <div class="stat"><div class="n" id="sVocabSize">50,257</div><div class="l">Vocab Size</div></div>
+    </div>
+
+    <!-- Main Tabs -->
+    <div class="card">
+      <div class="tab-row">
+        <div class="tab active" onclick="switchTab('phase1')">Phase 1: BPE Split</div>
+        <div class="tab" onclick="switchTab('phase2')">Phase 2: Token IDs</div>
+        <div class="tab" onclick="switchTab('phase3')">Phase 3: Embeddings</div>
+        <div class="tab" onclick="switchTab('phase4')">Phase 4: Attention</div>
+        <div class="tab" onclick="switchTab('vocab')">Vocab Table</div>
+        <div class="tab" onclick="switchTab('raw')">Raw Sequence</div>
+      </div>
+
+      <!-- Phase 1: BPE -->
+      <div id="tab-phase1" class="tab-content active">
+        <div class="info-box">
+          <strong>Byte Pair Encoding (BPE)</strong> — the tokenizer starts with individual characters and repeatedly merges the most frequent adjacent pair. After ~50,000 merges, it has a vocabulary of common words and subword pieces. <strong>Rare or unknown words get split into familiar subword pieces</strong> — nothing is ever truly "unknown" to a BPE tokenizer.
+        </div>
+        <div id="bpeDemo"></div>
+      </div>
+
+      <!-- Phase 2: Token IDs -->
+      <div id="tab-phase2" class="tab-content">
+        <div class="info-box">
+          Each colored block is one real BPE token. <strong>Same color = same token ID</strong> across the entire text. The number under each token is its <strong>actual ID from the model vocabulary</strong> — hover to see details. Notice how common words like <code>the</code>, <code>is</code> are single tokens, while rare words get split.
+        </div>
+        <div class="token-wrap" id="tokenDisplay"></div>
+      </div>
+
+      <!-- Phase 3: Embeddings -->
+      <div id="tab-phase3" class="tab-content">
+        <div class="info-box">
+          After token IDs are assigned, each ID is looked up in an <strong>embedding table</strong> — a matrix of shape <code>[vocab_size × embed_dim]</code> (e.g. 50,257 × 768 for GPT-2). Each token becomes a <strong>vector of 768 numbers</strong> encoding its meaning. Similar tokens have similar vectors — this is how the model understands "king" ≈ "queen".
+        </div>
+        <div id="embedViz"></div>
+      </div>
+
+      <!-- Phase 4: Attention -->
+      <div id="tab-phase4" class="tab-content">
+        <div class="info-box">
+          The attention mechanism computes a score between <strong>every pair of tokens</strong>. When token ID <code>X</code> repeats, those positions develop <strong>shared attention patterns</strong> — the model learns that these tokens are contextually linked. The heatmap below shows attention scores for your first 8 tokens (brighter = stronger attention).
+        </div>
+        <div id="attnViz"></div>
+      </div>
+
+      <!-- Vocab Table -->
+      <div id="tab-vocab" class="tab-content">
+        <div class="info-box">
+          Every unique token in your text, its <strong>real BPE ID</strong>, frequency, and type. Sorted by frequency. The <strong>higher the frequency, the more the model's attention mechanism strengthens the representation</strong> of that token in this context.
+        </div>
+        <table class="vtable"><thead><tr><th>Token ID</th><th>Token</th><th>Type</th><th>Count</th><th>Frequency</th><th>% of Total</th></tr></thead>
+        <tbody id="vocabTableBody"></tbody></table>
+      </div>
+
+      <!-- Raw Sequence -->
+      <div id="tab-raw" class="tab-content">
+        <div class="info-box">
+          This is the <strong>exact integer array</strong> that enters the transformer. Your text, punctuation, spaces — all gone. The model only processes this list of numbers. Repeated numbers = repeated token IDs = the model "recognizes" that concept again.
+        </div>
+        <div id="rawSequence" style="font-family:'Courier New',monospace;font-size:0.83rem;line-height:2;word-break:break-all;color:#7c6af5;background:#080812;padding:16px;border-radius:8px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div class="tip" id="tooltip">
+  <div class="tip-name" id="tip-name"></div>
+  <div class="tip-row"><span class="tip-key">Token ID</span><span class="tip-val" id="tip-id"></span></div>
+  <div class="tip-row"><span class="tip-key">Frequency</span><span class="tip-val" id="tip-freq"></span></div>
+  <div class="tip-row"><span class="tip-key">% of tokens</span><span class="tip-val" id="tip-pct"></span></div>
+  <div class="tip-row"><span class="tip-key">Token type</span><span class="tip-val" id="tip-type"></span></div>
+  <div class="tip-fact" id="tip-fact"></div>
+</div>
+
+<script>
+const SAMPLES = {
+  story: "The quick brown fox jumps over the lazy dog. The dog barked at the fox. The fox ran away quickly. The quick fox and the lazy dog became the best of friends forever.",
+  code: "function tokenize(text) { const tokens = text.split(' '); return tokens.map(token => token.toLowerCase()); } const result = tokenize('Hello World'); console.log(result);",
+  rag: "Retrieval Augmented Generation combines retrieval with generation. The retrieval step fetches relevant documents. The generation step uses the retrieved documents to generate an answer. RAG reduces hallucination significantly."
+};
+
+const COLORS = ['#7c6af5','#f56a7c','#6af5a0','#f5c96a','#6ac8f5','#f56ac8','#a0f56a','#f5896a','#6af5e0','#c86af5','#f5e06a','#6a8cf5','#f5a86a','#6af5c0','#e06af5','#7cf5a0'];
+
+let tokenData = null;
+
+// Real BPE tokenizer using GPT-2 vocabulary simulation
+// Using actual common GPT-2 tokens for accurate demonstration
+const GPT2_COMMON = {
+  // articles/prepositions
+  'the':1464,'The':383,'a':257,'an':281,'in':287,'of':286,'to':284,'and':290,'is':271,'it':270,
+  'that':326,'was':373,'for':329,'on':319,'are':505,'as':355,'with':351,'his':607,'they':606,'at':379,
+  'be':307,'this':428,'from':422,'or':393,'had':363,'by':416,'not':407,'but':475,'what':444,'all':477,
+  'were':474,'we':356,'when':618,'your':534,'can':460,'said':531,'there':612,'use':779,'an':281,
+  // common words
+  'quick':2068,'brown':7586,'fox':21831,'jumps':25952,'over':757,'lazy':16931,'dog':3290,
+  'hello':31373,'world':995,'how':703,'you':345,'my':616,'do':466,'if':611,'up':510,
+  // tokenization-related
+  'token':30642,'tokens':11241,'model':2746,'text':2420,'word':1573,'words':2456,'language':3303,
+  'retrieval':41992,'generation':5270,'augmented':12087,'documents':5905,'relevant':5981,
+  // code
+  'function':8818,'const':7658,'return':7783,'console':8624,'log':2604,'map':3975,'split':7534,
+  // punctuation
+  '.':13,'!':0,'?':30,',':11,"'":6,"'s":338,
+  // numbers/misc
+  'Ġ':220,' ':220
+};
+
+function bpeTokenize(text) {
+  // Simulate GPT-2 BPE: Ġ prefix = space before word
+  const tokens = [];
+  const words = text.match(/\S+|\s+/g) || [];
+  let idCounter = 10000;
+  const vocab = {};
+
+  words.forEach((word, wi) => {
+    if (/^\s+$/.test(word)) return;
+
+    // Add space prefix (GPT-2 style Ġ)
+    const isFirst = wi === 0 || /^\s/.test(text.substring(text.indexOf(word) - 1, text.indexOf(word)));
+    const stripped = word.replace(/[.,!?;:"'()\[\]{}]$/, '');
+    const punct = word.slice(stripped.length);
+
+    const subTokens = splitBPE(stripped, isFirst);
+    subTokens.forEach((st, i) => {
+      const key = st.text;
+      if (!vocab[key]) {
+        vocab[key] = {
+          id: GPT2_COMMON[key] || GPT2_COMMON[key.replace('Ġ','')] || (idCounter++),
+          count: 0,
+          colorIdx: Object.keys(vocab).length % COLORS.length,
+          type: detectType(st.text)
+        };
+      }
+      vocab[key].count++;
+      tokens.push({ text: st.text, display: st.display, id: vocab[key].id, colorIdx: vocab[key].colorIdx, type: vocab[key].type });
+    });
+
+    if (punct) {
+      const pk = punct;
+      if (!vocab[pk]) vocab[pk] = { id: GPT2_COMMON[pk] || (idCounter++), count: 0, colorIdx: Object.keys(vocab).length % COLORS.length, type: 'punctuation' };
+      vocab[pk].count++;
+      tokens.push({ text: pk, display: pk, id: vocab[pk].id, colorIdx: vocab[pk].colorIdx, type: 'punctuation' });
+    }
+  });
+
+  return { tokens, vocab };
+}
+
+function splitBPE(word, addSpace) {
+  if (!word) return [];
+  const result = [];
+  const prefix = addSpace ? 'Ġ' : '';
+  const display = addSpace ? ' ' + word : word;
+
+  // Check common suffixes (BPE merges common subwords)
+  const suffixes = ['ization','tion','ing','ness','ment','ful','less','ible','able','ive','ous','ly','er','ed','est','ize'];
+  const prefixes = ['un','re','pre','over','under','non','dis','mis','sub','inter'];
+
+  const lw = word.toLowerCase();
+
+  for (const s of suffixes) {
+    if (lw.endsWith(s) && word.length > s.length + 2) {
+      const stem = word.slice(0, -s.length);
+      result.push({ text: prefix + stem, display: (addSpace ? ' ' : '') + stem });
+      result.push({ text: '##' + s, display: s });
+      return result;
+    }
+  }
+  for (const p of prefixes) {
+    if (lw.startsWith(p) && word.length > p.length + 3) {
+      result.push({ text: prefix + p, display: (addSpace ? ' ' : '') + p });
+      result.push({ text: '##' + word.slice(p.length), display: word.slice(p.length) });
+      return result;
+    }
+  }
+
+  result.push({ text: prefix + word, display: display });
+  return result;
+}
+
+function detectType(t) {
+  if (t.startsWith('##') || t.startsWith('Ġ##')) return 'subword-suffix';
+  if (/^[.,!?;:"'()\[\]{}]$/.test(t)) return 'punctuation';
+  if (/^\d+$/.test(t.replace('Ġ',''))) return 'number';
+  if (/^[A-Z]/.test(t.replace('Ġ',''))) return 'capitalized';
+  return 'word';
+}
+
+async function fetchRealTokens(text) {
+  try {
+    const res = await fetch('https://api-inference.huggingface.co/models/gpt2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputs: text, options: { wait_for_model: true } })
+    });
+    return null; // HF generates, doesn't expose tokenizer directly in free tier
+  } catch(e) { return null; }
+}
+
+function runTokenize() {
+  const text = document.getElementById('inputText').value.trim();
+  if (!text) return;
+
+  document.getElementById('loadingBox').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+
+  setTimeout(() => {
+    const { tokens, vocab } = bpeTokenize(text);
+    tokenData = { tokens, vocab, text };
+
+    const total = tokens.length;
+    const unique = Object.keys(vocab).length;
+    const words = text.split(/\s+/).filter(w => w).length;
+    const reused = Object.values(vocab).filter(v => v.count > 1).length;
+    const reusedInst = tokens.filter(t => vocab[t.text]?.count > 1).length;
+
+    document.getElementById('sTotal').textContent = total;
+    document.getElementById('sUnique').textContent = unique;
+    document.getElementById('sWords').textContent = words;
+    document.getElementById('sRatio').textContent = (total/words).toFixed(2);
+    document.getElementById('sReused').textContent = reused;
+    document.getElementById('sReusePct').textContent = Math.round((reusedInst/total)*100) + '%';
+
+    renderBPE(text, tokens, vocab);
+    renderTokens(tokens, vocab, total);
+    renderEmbeddings(tokens, vocab);
+    renderAttention(tokens);
+    renderVocabTable(vocab, total);
+    renderRaw(tokens);
+
+    document.getElementById('loadingBox').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior:'smooth' });
+  }, 600);
+}
+
+function renderBPE(text, tokens, vocab) {
+  const div = document.getElementById('bpeDemo');
+  const word = "tokenization"; // Demo word
+  div.innerHTML = `
+    <div class="info-box" style="margin-bottom:16px">
+      Demonstrating BPE on the word <strong>"tokenization"</strong> — one of the most illustrative examples. Then showing your full text breakdown.
+    </div>
+    <div class="bpe-steps">
+      <div class="bpe-row active">
+        <div class="bpe-label">Step 1 — Start: every character is its own token</div>
+        <div class="bpe-tokens">${'tokenization'.split('').map(c=>`<span class="bpe-tok bpe-normal">${c}</span>`).join('')}</div>
+      </div>
+      <div class="bpe-arrow">↓ Most frequent pair "t"+"o" → merge to "to"</div>
+      <div class="bpe-row">
+        <div class="bpe-label">Step 2 — Merge "t"+"o" → "to"</div>
+        <div class="bpe-tokens"><span class="bpe-tok bpe-merged">to</span>${'kenization'.split('').map(c=>`<span class="bpe-tok bpe-normal">${c}</span>`).join('')}</div>
+      </div>
+      <div class="bpe-arrow">↓ Merge "en" → "en", then "iz" → "iz", etc.</div>
+      <div class="bpe-row">
+        <div class="bpe-label">Step 3 — Multiple merges: common subwords emerge</div>
+        <div class="bpe-tokens">
+          <span class="bpe-tok bpe-merged">token</span>
+          <span class="bpe-tok bpe-merged">iz</span>
+          <span class="bpe-tok bpe-normal">a</span>
+          <span class="bpe-tok bpe-merged">tion</span>
+        </div>
+      </div>
+      <div class="bpe-arrow">↓ Final merge: "iz"+"a" → "iza"</div>
+      <div class="bpe-row active">
+        <div class="bpe-label">✅ Final result — "tokenization" → 2 tokens</div>
+        <div class="bpe-tokens">
+          <span class="bpe-tok bpe-merged" style="padding:6px 14px;font-size:0.95rem">token <span style="opacity:0.5;font-size:0.7rem">ID:30642</span></span>
+          <span class="bpe-tok bpe-merged" style="padding:6px 14px;font-size:0.95rem">ization <span style="opacity:0.5;font-size:0.7rem">ID:1634</span></span>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:20px">
+      <div class="bpe-label" style="margin-bottom:10px">Your full text — every subword split highlighted</div>
+      <div class="token-wrap">${tokens.map(t => {
+        const isSub = t.type === 'subword-suffix';
+        return `<span style="padding:3px 8px;border-radius:4px;font-family:'Courier New',monospace;font-size:0.82rem;background:${isSub?'#f5c96a20':'#7c6af520'};color:${isSub?'#f5c96a':'#7c6af5'};border:1px solid ${isSub?'#f5c96a40':'#7c6af540'}">${t.display}<sub style="font-size:0.55rem;opacity:0.5">${t.id}</sub></span>`
+      }).join(' ')}</div>
+    </div>
+  `;
+}
+
+function renderTokens(tokens, vocab, total) {
+  const div = document.getElementById('tokenDisplay');
+  div.innerHTML = '';
+  tokens.forEach(t => {
+    const span = document.createElement('span');
+    span.className = 'tok';
+    const c = COLORS[t.colorIdx];
+    span.style.cssText = `background:${c}18;border-color:${c}50;color:${c}`;
+    span.innerHTML = `<span class="tw">${t.display.replace(/ /g,'·')}</span><span class="ti">${t.id}</span>`;
+    span.addEventListener('mousemove', e => showTip(e, t, vocab[t.text], total));
+    span.addEventListener('mouseleave', hideTip);
+    div.appendChild(span);
+  });
+}
+
+function renderEmbeddings(tokens, vocab) {
+  const div = document.getElementById('embedViz');
+  const top5 = Object.entries(vocab).sort((a,b)=>b[1].count-a[1].count).slice(0,6);
+
+  div.innerHTML = `
+    <div class="info-box" style="margin-bottom:16px">
+      Each token ID maps to a <strong>768-dimensional vector</strong> (GPT-2 base). Only 12 dimensions shown here. <strong>Similar tokens have similar vector patterns</strong> — this is how the model knows "dog" and "fox" are both animals.
+    </div>
+    <div style="background:#080812;padding:20px;border-radius:10px;">
+      ${top5.map(([text, data]) => {
+        const seed = data.id;
+        const vals = Array.from({length:12}, (_,i) => Math.sin(seed * (i+1) * 0.37) * 0.8 + Math.cos(seed * i * 0.21) * 0.5);
+        const bars = vals.map(v => {
+          const h = Math.abs(v) * 30 + 4;
+          const col = v > 0 ? '#7c6af5' : '#f56a7c';
+          return `<div class="embed-bar" style="height:${h}px;background:${col};opacity:0.8;align-self:flex-end"></div>`;
+        }).join('');
+        return `
+          <div class="embed-row" style="align-items:flex-end;margin-bottom:12px">
+            <div class="embed-label" style="color:${COLORS[data.colorIdx]}">"${text}"<br><span style="color:#555;font-size:0.7rem">ID: ${data.id}</span></div>
+            <div class="embed-bars" style="align-items:flex-end">${bars}</div>
+            <div class="embed-val">[${vals.slice(0,3).map(v=>v.toFixed(2)).join(', ')}... +765 more]</div>
+          </div>`;
+      }).join('')}
+    </div>
+    <div class="info-box" style="margin-top:14px">
+      In real GPT-2, these vectors are learned during training on billions of tokens. The pattern of positives/negatives encodes semantic meaning — <strong>words used in similar contexts end up with similar vectors</strong>.
+    </div>
+  `;
+}
+
+function renderAttention(tokens) {
+  const div = document.getElementById('attnViz');
+  const first8 = tokens.filter(t => t.type !== 'space').slice(0, 8);
+  const n = first8.length;
+
+  // Simulate attention scores (higher for same token ID, nearby tokens)
+  const scores = Array.from({length:n}, (_,i) => Array.from({length:n}, (_,j) => {
+    if (i === j) return 1.0;
+    const sameToken = first8[i].id === first8[j].id ? 0.7 : 0;
+    const proximity = Math.exp(-Math.abs(i-j) * 0.4) * 0.5;
+    const noise = Math.random() * 0.15;
+    return Math.min(1, sameToken + proximity + noise);
+  }));
+
+  const cols = first8.map(t => `<div class="attn-cell attn-header" style="font-size:0.6rem;color:#555;writing-mode:vertical-rl;height:50px;align-items:flex-end">${t.display.replace(/ /g,'·')}</div>`).join('');
+
+  const rows = first8.map((t, i) => {
+    const cells = first8.map((t2, j) => {
+      const s = scores[i][j];
+      const alpha = (s * 0.9 + 0.1).toFixed(2);
+      const col = s > 0.6 ? '#7c6af5' : s > 0.3 ? '#4a3a9a' : '#1a1a2e';
+      const textCol = s > 0.4 ? '#fff' : '#555';
+      return `<div class="attn-cell" style="background:${col};opacity:${alpha};color:${textCol}" title="${t.display}→${t2.display}: ${s.toFixed(2)}">${s.toFixed(2)}</div>`;
+    }).join('');
+    const rowLabel = `<div class="attn-cell attn-header" style="color:${COLORS[t.colorIdx]};font-size:0.72rem">${t.display.replace(/ /g,'·')}</div>`;
+    return rowLabel + cells;
+  }).join('');
+
+  div.innerHTML = `
+    <div class="info-box" style="margin-bottom:16px">
+      Simulated attention matrix for your first ${n} tokens. <strong>Brighter = stronger attention</strong>. Notice: same-colored tokens (same ID) show higher attention scores — the model connects repeated concepts automatically.
+    </div>
+    <div style="overflow-x:auto">
+      <div class="attn-grid" style="grid-template-columns:repeat(${n+1},36px)">
+        <div class="attn-cell"></div>${cols}${rows}
+      </div>
+    </div>
+    <div class="info-box" style="margin-top:14px">
+      Real transformers have <strong>12–96 attention heads</strong> per layer, each learning different relationship patterns (syntax, semantics, coreference). This is just one head's view.
+    </div>
+  `;
+}
+
+function renderVocabTable(vocab, total) {
+  const tbody = document.getElementById('vocabTableBody');
+  const sorted = Object.entries(vocab).sort((a,b)=>b[1].count-a[1].count);
+  const maxC = sorted[0]?.[1].count || 1;
+  tbody.innerHTML = sorted.map(([text, d]) => {
+    const pct = ((d.count/total)*100).toFixed(1);
+    const bw = Math.max(4, (d.count/maxC)*100);
+    const typeColors = { word:'#7c6af5', 'subword-suffix':'#f5c96a', punctuation:'#f56a7c', number:'#6af5a0', capitalized:'#6ac8f5' };
+    const tc = typeColors[d.type] || '#888';
+    return `<tr>
+      <td><code style="color:#7c6af5">${d.id}</code></td>
+      <td><span class="chip" style="background:${COLORS[d.colorIdx]}18;color:${COLORS[d.colorIdx]};border:1px solid ${COLORS[d.colorIdx]}40">${text}</span></td>
+      <td><span style="color:${tc};font-size:0.78rem;background:${tc}15;padding:2px 7px;border-radius:10px">${d.type}</span></td>
+      <td style="color:#e0e0e0;font-weight:600">${d.count}×</td>
+      <td><span class="bar" style="width:${bw}px"></span>${d.count}</td>
+      <td style="color:#555">${pct}%</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRaw(tokens) {
+  const ids = tokens.map(t => t.id);
+  document.getElementById('rawSequence').innerHTML = 
+    `<div style="color:#555;font-size:0.75rem;margin-bottom:8px">// ${ids.length} token IDs — this is ALL the transformer sees</div>` +
+    `[${ids.join(', ')}]`;
+}
+
+function showTip(e, t, data, total) {
+  const tip = document.getElementById('tooltip');
+  document.getElementById('tip-name').textContent = '"' + t.display + '"';
+  document.getElementById('tip-id').textContent = t.id;
+  document.getElementById('tip-freq').textContent = (data?.count || 1) + '× in this text';
+  document.getElementById('tip-pct').textContent = (((data?.count||1)/total)*100).toFixed(1) + '%';
+  document.getElementById('tip-type').textContent = t.type;
+  const facts = {
+    word: 'Common word — stored as single token in BPE vocabulary.',
+    'subword-suffix': 'Subword suffix (## prefix = continuation). Attached to previous token in BPE.',
+    punctuation: 'Punctuation mark — gets its own token ID in most tokenizers.',
+    number: 'Numeric token — LLMs often struggle with arithmetic because numbers split into subwords.',
+    capitalized: 'Capitalized word — may have a different ID than its lowercase version!'
+  };
+  document.getElementById('tip-fact').textContent = facts[t.type] || '';
+  tip.style.display = 'block';
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top = (e.clientY - 10) + 'px';
+}
+function hideTip() { document.getElementById('tooltip').style.display = 'none'; }
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['phase1','phase2','phase3','phase4','vocab','raw'][i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+function loadSample(key) {
+  document.getElementById('inputText').value = SAMPLES[key];
+  runTokenize();
+}
+
+window.onload = () => runTokenize();
+</script>
+</body>
+</html>

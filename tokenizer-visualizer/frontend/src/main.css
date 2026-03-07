@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        @apply bg-[#020617] text-[#F8FAFC] font-sans antialiased;
+    }
+
+    * {
+        @apply border-[#1E293B];
+    }
+}
+
+@layer components {
+    .card {
+        @apply bg-[#0F172A] rounded-[14px] border border-[#1E293B] p-6 shadow-sm transition-all duration-300;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 1) 0%, rgba(2, 6, 23, 0.4) 100%);
+    }
+
+    .card:hover {
+        @apply border-[#7c6af5]/50 shadow-neon-glow;
+    }
+
+    .btn-primary {
+        @apply bg-gradient-to-br from-[#7c6af5] to-[#f56a9a] hover:from-[#9d8df7] hover:to-[#f589b3] text-white font-semibold px-5 py-2.5 rounded-lg transition-all duration-300 cursor-pointer shadow-neon-glow hover:translate-y-[-1px];
+    }
+
+    .btn-secondary {
+        @apply bg-[#1a1a2e] hover:bg-[#1E293B] text-[#94a3b8] hover:text-white font-medium px-5 py-2.5 rounded-lg border border-[#2a2a4a] hover:border-[#7c6af5]/50 transition-all duration-300 cursor-pointer;
+    }
+
+    .glass-input {
+        @apply w-full bg-[#080812]/80 border border-[#2a2a4a] rounded-lg text-white p-4 font-mono resize-y outline-none leading-relaxed transition-all duration-200;
+    }
+
+    .glass-input:focus {
+        @apply border-[#7c6af5] shadow-neon-glow;
+    }
+
+    .info-box {
+        @apply bg-[#12122a] border border-[#1e1e3a] rounded-lg p-4 text-[0.88rem] text-[#94a3b8] leading-relaxed mb-4;
+    }
+
+    .info-box strong {
+        @apply text-[#c0b8ff];
+    }
+
+    .info-box code {
+        @apply bg-[#0a0a14] text-[#7c6af5] px-1.5 py-0.5 rounded-[3px] font-mono;
+    }
+}
