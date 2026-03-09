@@ -41,3 +41,8 @@ class TokenizeResponse(BaseModel):
     embeddings: Optional[List[EmbeddingInfo]] = None
     model_used: str
     processing_time_ms: float
+
+class ErrorResponse(BaseModel):
+    error: str          # Short error category e.g. "validation_error", "rate_limit_exceeded"
+    detail: str         # Human-readable description
+    status_code: int    # HTTP status code

@@ -47,6 +47,9 @@ def test_validation_errors():
     # Empty string should fail
     response = client.post("/api/tokenize", json={"text": ""})
     assert response.status_code == 422
+    data = response.json()
+    assert "error" in data
+    assert "status_code" in data
     
     # Text too long
     long_text = "A" * 2001

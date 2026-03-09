@@ -1,9 +1,11 @@
 import time
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
-from models import TokenizeRequest, TokenizeResponse
+from models import TokenizeRequest, TokenizeResponse, ErrorResponse
 from config import settings
 from tokenizer import tokenizer_service, tokenize_process
 from embeddings import embedding_service
@@ -18,6 +20,65 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _status_to_error_type(status_code: int) -> str:
+    return {
+        400: "bad_request",
+        404: "not_found",
+        422: "validation_error",
+        429: "rate_limit_exceeded",
+        500: "internal_error",
+    }.get(status_code, "unknown_error")
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(
+            error=_status_to_error_type(exc.status_code),
+            detail=str(exc.detail),
+            status_code=exc.status_code
+        ).model_dump()
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=ErrorResponse(
+            error="validation_error",
+            detail=str(exc),
+            status_code=422
+        ).model_dump()
+    )
+
+
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=ErrorResponse(
+            error="validation_error",
+            detail=str(exc),
+            status_code=422
+        ).model_dump()
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content=ErrorResponse(
+            error="internal_error",
+            detail=f"Internal server error: {str(exc)}",
+            status_code=500
+        ).model_dump()
+    )
+
 
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
@@ -77,8 +138,5 @@ async def tokenize(req: TokenizeRequest):
             model_used=req.model,
             processing_time_ms=end_ms - start_ms
         )
-    except ValidationError as ve:
-        raise HTTPException(status_code=422, detail=ve.errors())
     except Exception as e:
-        # Proper error handling without silent 500s
         raise HTTPException(status_code=500, detail=f"Model Processing Error: {str(e)}")
