@@ -96,3 +96,89 @@ def test_rate_limit_format():
     # that the endpoint still works (not broken by limiter setup)
     response = client.post("/api/tokenize", json={"text": "test", "model": "gpt2"})
     assert response.status_code == 200
+
+
+# === New endpoint tests for BFET-01 and BFET-02 ===
+
+def test_attention_basic():
+    """BFET-01: POST /api/attention returns tokens and attention matrix."""
+    response = client.post("/api/attention", json={"text": "Hello", "model": "bert-base-uncased"})
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert "tokens" in data
+    assert "attention_matrix" in data
+    assert "layer" in data
+    
+    # Matrix should be square (n x n)
+    matrix = data["attention_matrix"]
+    n = len(matrix)
+    assert n == len(data["tokens"])
+    for row in matrix:
+        assert len(row) == n
+        # All values should be floats between 0 and 1
+        for val in row:
+            assert 0 <= val <= 1
+
+
+def test_attention_char_limit():
+    """BFET-01: POST /api/attention enforces 100-char text limit."""
+    # Text of 101 characters should fail with 422
+    long_text = "A" * 101
+    response = client.post("/api/attention", json={"text": long_text})
+    assert response.status_code == 422
+
+
+def test_attention_empty():
+    """BFET-01: Empty text after sanitization returns 400."""
+    # Zero-width characters become empty after sanitization
+    response = client.post("/api/attention", json={"text": "\u200b\u200c"})
+    assert response.status_code == 400
+    data = response.json()
+    assert data["error"] == "bad_request"
+
+
+def test_compare_basic():
+    """BFET-02: POST /api/compare returns token counts and shared/unique tokens."""
+    response = client.post("/api/compare", json={
+        "text1": "Hello world",
+        "text2": "Hello there",
+        "model": "gpt2"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert "text1_token_count" in data
+    assert "text2_token_count" in data
+    assert "shared_tokens" in data
+    assert "text1_unique_tokens" in data
+    assert "text2_unique_tokens" in data
+    
+    # Should have shared tokens
+    assert "Hello" in data["shared_tokens"] or any("Hello" in t for t in data["shared_tokens"])
+    # Both should have unique tokens
+    assert len(data["text1_unique_tokens"]) > 0
+    assert len(data["text2_unique_tokens"]) > 0
+
+
+def test_compare_same_text():
+    """BFET-02: Identical texts have empty unique lists."""
+    response = client.post("/api/compare", json={
+        "text1": "test",
+        "text2": "test",
+        "model": "gpt2"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Unique lists should be empty
+    assert data["text1_unique_tokens"] == []
+    assert data["text2_unique_tokens"] == []
+    # Shared should contain all tokens
+    assert len(data["shared_tokens"]) == data["text1_token_count"]
+
+
+def test_compare_empty_text():
+    """BFET-02: Empty text returns 422 (Pydantic min_length)."""
+    response = client.post("/api/compare", json={"text1": "", "text2": "Hello"})
+    assert response.status_code == 422
