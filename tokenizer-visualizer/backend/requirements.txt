@@ -36,6 +36,7 @@ rich==14.3.3
 safetensors==0.7.0
 setuptools==82.0.0
 shellingham==1.5.4
+slowapi==0.1.9
 starlette==0.52.1
 sympy==1.14.0
 tokenizers==0.22.2
