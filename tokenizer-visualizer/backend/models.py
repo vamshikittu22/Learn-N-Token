@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Tuple
+from typing import List, Optional, Literal, Tuple, Tuple
 
 # All request/response types must be strictly typed
 class TokenizeRequest(BaseModel):
@@ -46,3 +46,32 @@ class ErrorResponse(BaseModel):
     error: str          # Short error category e.g. "validation_error", "rate_limit_exceeded"
     detail: str         # Human-readable description
     status_code: int    # HTTP status code
+
+
+class AttentionRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=100)  # 100-char limit enforced
+    model: Literal["bert-base-uncased"] = "bert-base-uncased"
+
+
+class AttentionResponse(BaseModel):
+    tokens: List[str]
+    attention_matrix: List[List[float]]
+    layer: int
+    model_used: str
+    processing_time_ms: float
+
+
+class CompareRequest(BaseModel):
+    text1: str = Field(..., min_length=1, max_length=2000)
+    text2: str = Field(..., min_length=1, max_length=2000)
+    model: Literal["gpt2", "bert-base-uncased"] = "gpt2"
+
+
+class CompareResponse(BaseModel):
+    text1_token_count: int
+    text2_token_count: int
+    shared_tokens: List[str]
+    text1_unique_tokens: List[str]
+    text2_unique_tokens: List[str]
+    model_used: str
+    processing_time_ms: float

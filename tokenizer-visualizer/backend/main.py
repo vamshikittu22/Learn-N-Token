@@ -9,10 +9,11 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from models import TokenizeRequest, TokenizeResponse, ErrorResponse
+from models import TokenizeRequest, TokenizeResponse, ErrorResponse, AttentionRequest, AttentionResponse, CompareRequest, CompareResponse
 from config import settings
 from tokenizer import tokenizer_service, tokenize_process
 from embeddings import embedding_service
+from attention import attention_service
 
 
 def sanitize_input(text: str) -> str:
@@ -62,9 +63,10 @@ async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded)
         ).model_dump()
     )
 
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content=ErrorResponse(
@@ -124,6 +126,7 @@ async def startup_event():
     # Pre-load GPT-2 in background into memory singleton
     tokenizer_service.preload_models()
     embedding_service.preload_model()
+    attention_service.preload_model()
     print("Models preloaded into memory on startup.")
 
 @app.get("/health")
@@ -177,3 +180,72 @@ async def tokenize(request: Request, req: TokenizeRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model Processing Error: {str(e)}")
+
+
+@app.post("/api/attention", response_model=AttentionResponse)
+@limiter.limit("30/minute")
+async def attention(request: Request, req: AttentionRequest):
+    """Extract BERT attention weights for the given text."""
+    # Sanitize input
+    clean_text = sanitize_input(req.text)
+    if not clean_text:
+        raise HTTPException(status_code=400, detail="Text is empty after sanitization")
+
+    try:
+        start_ms = time.time() * 1000
+        result = attention_service.get_attention(clean_text)
+        end_ms = time.time() * 1000
+
+        return AttentionResponse(
+            tokens=result["tokens"],
+            attention_matrix=result["attention_matrix"],
+            layer=result["layer"],
+            model_used=req.model,
+            processing_time_ms=end_ms - start_ms
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Attention Extraction Error: {str(e)}")
+
+
+@app.post("/api/compare", response_model=CompareResponse)
+@limiter.limit("30/minute")
+async def compare(request: Request, req: CompareRequest):
+    """Compare tokenization of two texts."""
+    # Sanitize inputs
+    clean_text1 = sanitize_input(req.text1)
+    clean_text2 = sanitize_input(req.text2)
+    
+    if not clean_text1:
+        raise HTTPException(status_code=400, detail="Text 1 is empty after sanitization")
+    if not clean_text2:
+        raise HTTPException(status_code=400, detail="Text 2 is empty after sanitization")
+
+    try:
+        start_ms = time.time() * 1000
+        
+        # Tokenize both texts using existing tokenize_process
+        tokens1, _, _, _ = tokenize_process(clean_text1, req.model, False)
+        tokens2, _, _, _ = tokenize_process(clean_text2, req.model, False)
+        
+        # Extract token text sets
+        set1 = set(t.text for t in tokens1)
+        set2 = set(t.text for t in tokens2)
+        
+        # Compute shared and unique tokens
+        shared_tokens = sorted(set1 & set2)
+        text1_unique_tokens = sorted(set1 - set2)
+        text2_unique_tokens = sorted(set2 - set1)
+        
+        end_ms = time.time() * 1000
+        
+        return CompareResponse(
+            text1_token_count=len(tokens1),
+            text2_token_count=len(tokens2),
+            shared_tokens=shared_tokens,
+            text1_unique_tokens=text1_unique_tokens,
+            text2_unique_tokens=text2_unique_tokens,
+            model_used=req.model,
+            processing_time_ms=end_ms - start_ms
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Compare Error: {str(e)}")
