@@ -33,11 +33,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Every API error response (400, 404, 422, 429, 500) returns a consistent `{error, detail, status_code}` JSON structure
   4. Sending more than 30 requests/minute to `/api/tokenize` from one IP returns a 429 response
   5. Submitting text containing null bytes, control characters, or zero-width spaces returns sanitized results (or 400 if empty after sanitization)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md — Fix test infrastructure + CORS env config + .env.example
+- [ ] 01-02-PLAN.md — Error standardization + rate limiting + input sanitization
 
 ### Phase 2: Backend New Features
 **Goal**: The backend exposes all API capabilities needed for the full 7-tab visualization experience
