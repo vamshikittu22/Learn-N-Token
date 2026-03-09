@@ -49,11 +49,11 @@ Plans:
   3. Selecting "gpt4" as the model option tokenizes text using tiktoken's cl100k_base encoding with vocab_size 100277
   4. Every `/api/tokenize` response includes `context_window_usage` showing usage percentages across 5 model context windows
   5. The Swagger UI at `/docs` shows organized, tagged, and documented endpoints at API version 0.2.0
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md — Attention endpoint + compare endpoint (BFET-01, BFET-02)
+- [ ] 02-02-PLAN.md — tiktoken/GPT-4 support + token budget calculator + OpenAPI docs (BFET-03, BFET-04, BFET-05)
 
 ### Phase 3: Frontend Data Layer
 **Goal**: The frontend TypeScript types, Zustand store, and API layer fully support all new backend capabilities
