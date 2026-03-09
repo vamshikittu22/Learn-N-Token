@@ -101,43 +101,43 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BFIX-01 | Phase ? | Pending |
-| BFIX-02 | Phase ? | Pending |
-| BFIX-03 | Phase ? | Pending |
-| BFIX-04 | Phase ? | Pending |
-| BFIX-05 | Phase ? | Pending |
-| BFET-01 | Phase ? | Pending |
-| BFET-02 | Phase ? | Pending |
-| BFET-03 | Phase ? | Pending |
-| BFET-04 | Phase ? | Pending |
-| BFET-05 | Phase ? | Pending |
-| FCMP-01 | Phase ? | Pending |
-| FCMP-02 | Phase ? | Pending |
-| FCMP-03 | Phase ? | Pending |
-| FCMP-04 | Phase ? | Pending |
-| FCMP-05 | Phase ? | Pending |
-| FINT-01 | Phase ? | Pending |
-| FINT-02 | Phase ? | Pending |
-| FINT-03 | Phase ? | Pending |
-| FINT-04 | Phase ? | Pending |
-| QUAL-01 | Phase ? | Pending |
-| QUAL-02 | Phase ? | Pending |
-| QUAL-03 | Phase ? | Pending |
-| QUAL-04 | Phase ? | Pending |
-| QUAL-05 | Phase ? | Pending |
-| DEVP-01 | Phase ? | Pending |
-| DEVP-02 | Phase ? | Pending |
-| DEVP-03 | Phase ? | Pending |
-| DEVP-04 | Phase ? | Pending |
-| DEVP-05 | Phase ? | Pending |
-| DOCS-01 | Phase ? | Pending |
-| DOCS-02 | Phase ? | Pending |
+| BFIX-01 | Phase 1: Backend Fixes & Hardening | Pending |
+| BFIX-02 | Phase 1: Backend Fixes & Hardening | Pending |
+| BFIX-03 | Phase 1: Backend Fixes & Hardening | Pending |
+| BFIX-04 | Phase 1: Backend Fixes & Hardening | Pending |
+| BFIX-05 | Phase 1: Backend Fixes & Hardening | Pending |
+| BFET-01 | Phase 2: Backend New Features | Pending |
+| BFET-02 | Phase 2: Backend New Features | Pending |
+| BFET-03 | Phase 2: Backend New Features | Pending |
+| BFET-04 | Phase 2: Backend New Features | Pending |
+| BFET-05 | Phase 2: Backend New Features | Pending |
+| FCMP-01 | Phase 4: Visualization Components | Pending |
+| FCMP-02 | Phase 4: Visualization Components | Pending |
+| FCMP-03 | Phase 4: Visualization Components | Pending |
+| FCMP-04 | Phase 4: Visualization Components | Pending |
+| FCMP-05 | Phase 4: Visualization Components | Pending |
+| FINT-01 | Phase 5: App Assembly & Accessibility | Pending |
+| FINT-02 | Phase 3: Frontend Data Layer | Pending |
+| FINT-03 | Phase 3: Frontend Data Layer | Pending |
+| FINT-04 | Phase 3: Frontend Data Layer | Pending |
+| QUAL-01 | Phase 6: TypeScript Strict & Error Handling | Pending |
+| QUAL-02 | Phase 6: TypeScript Strict & Error Handling | Pending |
+| QUAL-03 | Phase 5: App Assembly & Accessibility | Pending |
+| QUAL-04 | Phase 4: Visualization Components | Pending |
+| QUAL-05 | Phase 5: App Assembly & Accessibility | Pending |
+| DEVP-01 | Phase 7: DevOps & Containerization | Pending |
+| DEVP-02 | Phase 7: DevOps & Containerization | Pending |
+| DEVP-03 | Phase 7: DevOps & Containerization | Pending |
+| DEVP-04 | Phase 7: DevOps & Containerization | Pending |
+| DEVP-05 | Phase 1: Backend Fixes & Hardening | Pending |
+| DOCS-01 | Phase 8: Documentation | Pending |
+| DOCS-02 | Phase 8: Documentation | Pending |
 
 **Coverage:**
 - v1 requirements: 31 total
-- Mapped to phases: 0
-- Unmapped: 31
+- Mapped to phases: 31
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-09*
-*Last updated: 2026-03-09 after initial definition*
+*Last updated: 2026-03-09 after roadmap creation*
