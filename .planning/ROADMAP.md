@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Fix test infrastructure + CORS env config + .env.example
+- [x] 01-01-PLAN.md — Fix test infrastructure + CORS env config + .env.example
 - [ ] 01-02-PLAN.md — Error standardization + rate limiting + input sanitization
 
 ### Phase 2: Backend New Features
@@ -148,7 +148,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Backend Fixes & Hardening | 0/TBD | Not started | - |
+| 1. Backend Fixes & Hardening | 1/2 | In progress | - |
 | 2. Backend New Features | 0/TBD | Not started | - |
 | 3. Frontend Data Layer | 0/TBD | Not started | - |
 | 4. Visualization Components | 0/TBD | Not started | - |
@@ -159,4 +159,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 ---
 *Roadmap created: 2026-03-09*
-*Last updated: 2026-03-09*
+*Last updated: 2026-03-09 (01-01 complete)*

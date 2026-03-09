@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 ## Current Position
 
 Phase: 1 of 8 (Backend Fixes & Hardening)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-09 — Roadmap created
+Plan: 1 of 2 in current phase
+Status: Executing
+Last activity: 2026-03-09 — Completed 01-01-PLAN.md
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 6%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 4 min
+- Total execution time: 0.07 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-backend-fixes-and-hardening | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: -
-- Trend: -
+- Last 5 plans: 4 min
+- Trend: baseline
 
 *Updated after each plan completion*
 
@@ -45,6 +45,8 @@ Recent decisions affecting current work:
 - [Roadmap]: 8-phase structure derived from 31 requirements across 7 categories
 - [Roadmap]: DEVP-05 (.env.example) grouped with Phase 1 since it documents CORS_ORIGINS from BFIX-02
 - [Roadmap]: Phase 7 (DevOps) depends only on Phase 1, can run in parallel with Phases 3-6
+- [01-01]: Used Union[str, list[str]] type for cors_origins to work around pydantic-settings JSON parsing of list env vars
+- [01-01]: Belt-and-suspenders approach for pytest imports: both pytest.ini pythonpath and conftest.py sys.path insertion
 
 ### Pending Todos
 
@@ -52,10 +54,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- Backend tests currently fail due to import path issues (addressed in Phase 1, BFIX-01)
+- ~~Backend tests currently fail due to import path issues~~ ✓ Resolved in 01-01
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Roadmap created, ready to plan Phase 1
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None
