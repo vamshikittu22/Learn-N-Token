@@ -1,191 +1,246 @@
-import { useState } from 'react'
-import { useTokenizerStore } from '@/store/tokenizerStore'
-import { SAMPLE_TEXTS } from '@/types'
-import { Loader2, Sparkles } from 'lucide-react'
-import StatsBar from '@/components/StatsBar'
-import TokenDisplay from '@/components/TokenDisplay'
-import RawSequence from '@/components/RawSequence'
+import React from 'react';
+import { useTokenizerStore } from './store/tokenizerStore';
+import { ModelSelection, TabType } from './types';
+import StatsBar from './components/StatsBar';
+import TokenDisplay from './components/TokenDisplay';
+import RawSequence from './components/RawSequence';
+import VocabTable from './components/VocabTable';
+import EmbeddingChart from './components/EmbeddingChart';
+import AttentionHeatmap from './components/AttentionHeatmap';
+import BPEAnimation from './components/BPEAnimation';
+import TokenBudgetPanel from './components/TokenBudgetPanel';
+import PipelineDiagram from './components/PipelineDiagram';
+import { Brain, ExternalLink, Columns, Loader2 } from 'lucide-react';
+
+const SAMPLES = [
+    { name: 'Story', text: 'The neon lights of the city reflected in the puddle. She tightened her coat.' },
+    { name: 'Code', text: 'function calculateSum(a: number, b: number) {\n  return a + b;\n}' },
+    { name: 'RAG Document', text: 'Title: Q4 Earnings Report. Revenue grew by 15% year-over-year, driven by cloud.' },
+    { name: 'Code+Math', text: 'Let $x = \\sum_{i=1}^{n} i^2$. def sq_sum(n): return sum(i*i for i in range(1, n+1))' }
+];
+
+const MODELS: { value: ModelSelection, label: string, vocabSize: number }[] = [
+    { value: 'gpt2', label: 'GPT-2', vocabSize: 50257 },
+    { value: 'bert-base-uncased', label: 'BERT Base', vocabSize: 30522 },
+    { value: 'gpt4', label: 'GPT-4 (tiktoken)', vocabSize: 100277 }
+];
+
+const TABS: { id: TabType, label: string }[] = [
+    { id: 'tokens', label: 'LEGO Blocks' },
+    { id: 'raw', label: 'Secret IDs' },
+    { id: 'vocab', label: 'Dictionary' },
+    { id: 'embeddings', label: 'Brain Maps' },
+    { id: 'attention', label: 'Connecting Words' },
+    { id: 'bpe', label: 'Merging Game' },
+    { id: 'budget', label: 'Robot Memory' }
+];
 
 export default function App() {
-    const { input, model, result, loading, error, setInput, setModel, tokenize, reset } = useTokenizerStore()
-    const [activeTab, setActiveTab] = useState<'tokens' | 'raw'>('tokens')
+    const {
+        input, setInput, model, setModel, loading, error, result,
+        activeTab, setActiveTab, tokenize, compareMode, toggleCompareMode,
+        compareInput, setCompareInput, runComparison, compareResult
+    } = useTokenizerStore();
 
-    const handleSampleText = (text: string) => {
-        setInput(text)
-    }
+    const handleTokenize = () => {
+        if (compareMode) {
+            runComparison();
+        } else {
+            tokenize();
+        }
+    };
 
     return (
-        <div className="min-h-screen bg-[#020617] text-[#F8FAFC]">
+        <div className="min-h-screen flex flex-col items-center pb-20">
             {/* Header */}
-            <header className="border-b border-[#1E293B] bg-gradient-to-r from-[#0d0d1f] to-[#141428] relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#7c6af5] via-[#f56a9a] to-[#6af5a0]"></div>
-                <div className="container mx-auto px-6 py-8 relative z-10">
-                    <div className="flex items-center gap-3 mb-2">
-                        <Sparkles className="w-8 h-8 text-[#7c6af5] drop-shadow-[0_0_8px_rgba(124,106,245,0.8)]" />
-                        <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-[#7c6af5] to-[#f56a9a]">
-                            Brains & Tokens: Deep Dive
+            <header className="w-full border-b border-dark-border bg-dark-card py-4 px-6 flex justify-between items-center sticky top-0 z-50">
+                <div className="flex items-center gap-3">
+                    <Brain className="text-neon-purple w-8 h-8" />
+                    <div>
+                        <h1 className="text-xl font-bold bg-gradient-to-r from-neon-purple to-neon-pink bg-clip-text text-transparent">
+                            Learn'N'Token
                         </h1>
+                        <p className="text-xs text-gray-400">LLM Tokenizer Visualizer</p>
                     </div>
-                    <p className="text-[#94a3b8] font-medium text-sm tracking-wide uppercase">
-                        Interactive BPE Tokenization Explorer
-                    </p>
                 </div>
+                <a href="https://github.com/vamshikittu22/Learn-N-Token" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white transition-colors">
+                    <ExternalLink className="w-5 h-5" />
+                </a>
             </header>
 
-            {/* Main Content */}
-            <main className="container mx-auto px-4 py-8 max-w-[1100px]">
-                {/* Input Section */}
-                <div className="card mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-bold text-[#7c6af5] uppercase tracking-widest">✏️ Enter Your Text</h2>
-                        <div className="flex items-center gap-4">
-                            <select
-                                value={model}
-                                onChange={(e) => setModel(e.target.value as 'gpt2' | 'bert-base-uncased')}
-                                className="bg-[#1a1a2e] border border-[#2a2a4a] text-[#e0e0e0] rounded-lg px-4 py-2 text-sm outline-none cursor-pointer hover:border-[#7c6af5] transition-colors"
-                            >
-                                <option value="gpt2">GPT-2 (50,257 tokens)</option>
-                                <option value="bert-base-uncased">BERT (30,522 tokens)</option>
-                            </select>
+            <main className="w-full max-w-6xl px-6 mt-8 flex flex-col gap-6">
+                {/* Model Selection */}
+                <div className="flex flex-wrap gap-4">
+                    {MODELS.map(m => (
+                        <button
+                            key={m.value}
+                            onClick={() => setModel(m.value)}
+                            className={`flex flex-col items-center justify-center flex-1 py-3 px-4 rounded-lg border text-center transition-all ${model === m.value
+                                ? 'border-neon-purple bg-neon-purple/10 text-white'
+                                : 'border-dark-border bg-dark-card text-gray-400 hover:border-gray-500'
+                                }`}
+                        >
+                            <span className="font-semibold whitespace-nowrap">{m.label}</span>
+                            <span className="text-xs opacity-70 mt-1 whitespace-nowrap">Vocab: {m.vocabSize.toLocaleString()}</span>
+                        </button>
+                    ))}
+                </div>
+
+                {/* Input Area */}
+                <div className={`grid gap-6 ${compareMode ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+                    <div className="flex flex-col gap-3">
+                        <div className="flex justify-between items-center">
+                            <label className="text-sm font-semibold text-gray-300">
+                                {compareMode ? 'Text 1' : 'Input Text'}
+                            </label>
+                            {!compareMode && (
+                                <div className="flex gap-2">
+                                    {SAMPLES.map(s => (
+                                        <button key={s.name} onClick={() => setInput(s.text)} className="text-xs px-2 py-1 rounded bg-dark-card border border-dark-border hover:border-neon-purple transition-colors">
+                                            {s.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
+                        <textarea
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Enter text here to see how it is tokenized..."
+                            className="w-full h-40 bg-dark-input border border-dark-border rounded-lg p-4 font-mono text-sm resize-none outline-none glowing-input"
+                        />
                     </div>
 
-                    <textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Type or paste any text to see how the model processes it..."
-                        className="glass-input h-36"
-                        maxLength={2000}
-                    />
+                    {compareMode && (
+                        <div className="flex flex-col gap-3">
+                            <label className="text-sm font-semibold text-gray-300">Text 2</label>
+                            <textarea
+                                value={compareInput}
+                                onChange={(e) => setCompareInput(e.target.value)}
+                                placeholder="Enter second text to compare..."
+                                className="w-full h-40 bg-dark-input border border-dark-border rounded-lg p-4 font-mono text-sm resize-none outline-none glowing-input"
+                            />
+                        </div>
+                    )}
+                </div>
 
-                    <div className="flex flex-wrap items-center justify-between mt-5 gap-4">
-                        <div className="flex flex-wrap gap-3">
-                            {SAMPLE_TEXTS.map((sample) => (
+                {!input.trim() && !compareMode && (
+                    <div className="w-full mt-8 p-10 bg-dark-card border border-dark-border rounded-xl flex flex-col items-center justify-center text-center animate-in fade-in duration-700">
+                        <div className="w-16 h-16 bg-neon-purple/20 rounded-full flex items-center justify-center mb-6 border border-neon-purple/40">
+                            <Brain className="w-8 h-8 text-neon-purple animate-pulse" />
+                        </div>
+                        <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent mb-4">
+                            How do Neural Networks read text?
+                        </h2>
+                        <p className="max-w-2xl text-gray-400 leading-relaxed mb-4 text-lg">
+                            Large Language Models (like GPT-4 and Claude) don't process language word-by-word.
+                            Instead, they break text down into <span className="text-neon-pink font-semibold">Tokens</span>—sub-word chunks that represent common root structures.
+                        </p>
+
+                        <PipelineDiagram />
+
+                        <div className="mt-2 text-sm text-gray-500 italic">
+                            Select a sample preset above or type your own text to begin the visualizer.
+                        </div>
+                    </div>
+                )}
+
+                {/* Submit Block */}
+                <div className="relative">
+                    {(!input.trim() || (compareMode && !compareInput.trim())) && input.trim().length > 0 && (
+                        <div className="absolute -top-10 left-0 w-full text-center text-sm font-semibold text-red-500">
+                            Both fields must be filled to run a comparison.
+                        </div>
+                    )}
+                    <button
+                        onClick={handleTokenize}
+                        disabled={loading || !input.trim() || (compareMode && !compareInput.trim())}
+                        className="w-full mt-4 py-4 rounded-lg bg-neon-purple hover:bg-neon-pink text-white font-bold text-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-20 disabled:cursor-not-allowed"
+                    >
+                        {loading ? <Loader2 className="animate-spin w-6 h-6" /> : 'Run Tokenization'}
+                    </button>
+                </div>
+
+                {error && (
+                    <div className="w-full p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
+                        {error}
+                    </div>
+                )}
+
+                {/* Results Area */}
+                {result && !compareMode && (
+                    <div className="flex flex-col gap-6 mt-8 animate-in fade-in duration-500">
+                        <PipelineDiagram input={input} tokens={result.tokens} rawIds={result.raw_ids} />
+
+                        <StatsBar />
+
+                        <div className="flex border-b border-dark-border overflow-x-auto hide-scrollbar">
+                            {TABS.map(tab => (
                                 <button
-                                    key={sample.name}
-                                    onClick={() => handleSampleText(sample.text)}
-                                    className="btn-secondary text-xs"
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`px-6 py-3 whitespace-nowrap font-medium transition-colors border-b-2 ${activeTab === tab.id
+                                        ? 'border-neon-purple text-neon-purple'
+                                        : 'border-transparent text-gray-400 hover:text-white'
+                                        }`}
                                 >
-                                    {sample.name}
+                                    {tab.label}
                                 </button>
                             ))}
                         </div>
 
-                        <div className="flex gap-2">
-                            <button
-                                onClick={reset}
-                                className="btn-secondary"
-                                disabled={loading}
-                            >
-                                Reset
-                            </button>
-                            <button
-                                onClick={tokenize}
-                                disabled={loading || !input.trim()}
-                                className="btn-primary flex items-center gap-2"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Tokenizing...
-                                    </>
-                                ) : (
-                                    'Tokenize'
-                                )}
-                            </button>
-                        </div>
-                    </div>
-
-                    {error && (
-                        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400">
-                            {error}
-                        </div>
-                    )}
-
-                    <div className="mt-4 text-sm text-gray-400">
-                        <span>{input.length} / 2000 characters</span>
-                    </div>
-                </div>
-
-                {/* Stats Bar */}
-                {result && (
-                    <div className="mb-6">
-                        <StatsBar result={result} />
-                    </div>
-                )}
-
-                {/* Tabs */}
-                {result && (
-                    <div className="mb-6">
-                        <div className="flex gap-2 border-b border-[#1E293B]">
-                            <button
-                                onClick={() => setActiveTab('tokens')}
-                                className={`px-4 py-2 font-medium transition-colors ${activeTab === 'tokens'
-                                    ? 'text-[#7c6af5] border-b-2 border-[#7c6af5] shadow-[inset_0_-2px_0_0_#7c6af5]'
-                                    : 'text-[#94a3b8] hover:text-white'
-                                    }`}
-                            >
-                                Token Visualization
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('raw')}
-                                className={`px-4 py-2 font-medium transition-colors ${activeTab === 'raw'
-                                    ? 'text-[#7c6af5] border-b-2 border-[#7c6af5] shadow-[inset_0_-2px_0_0_#7c6af5]'
-                                    : 'text-[#94a3b8] hover:text-white'
-                                    }`}
-                            >
-                                Raw Sequence
-                            </button>
+                        <div className="bg-dark-card border border-dark-border rounded-xl p-6 min-h-[400px]">
+                            {activeTab === 'tokens' && <TokenDisplay />}
+                            {activeTab === 'raw' && <RawSequence />}
+                            {activeTab === 'vocab' && <VocabTable />}
+                            {activeTab === 'embeddings' && <EmbeddingChart />}
+                            {activeTab === 'attention' && <AttentionHeatmap />}
+                            {activeTab === 'bpe' && <BPEAnimation />}
+                            {activeTab === 'budget' && <TokenBudgetPanel />}
                         </div>
                     </div>
                 )}
 
-                {/* Tab Content */}
-                {result && (
-                    <div>
-                        {activeTab === 'tokens' && <TokenDisplay />}
-                        {activeTab === 'raw' && <RawSequence result={result} />}
-                    </div>
-                )}
-
-                {/* Empty State */}
-                {!result && !loading && (
-                    <div className="card text-center py-16 relative overflow-hidden flex flex-col items-center justify-center">
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(124,106,245,0.05)_0%,transparent_70%)] pointer-events-none"></div>
-                        <Sparkles className="w-16 h-16 text-[#7c6af5] mb-6 drop-shadow-[0_0_8px_rgba(124,106,245,0.5)]" />
-                        <h3 className="text-2xl font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-[#7c6af5] to-[#f56a9a]">Ready to Tokenize</h3>
-                        <p className="text-[#94a3b8] mb-8 max-w-md mx-auto leading-relaxed">
-                            Enter some text above or choose a sample to see how LLMs break down text into tokens using BPE.
-                        </p>
-                        <div className="flex justify-center gap-6 text-sm text-[#94a3b8] font-mono">
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-[#7c6af5] shadow-[0_0_8px_#7c6af5]"></span>
-                                <span>Word</span>
+                {/* Compare Results Area */}
+                {compareResult && compareMode && (
+                    <div className="bg-dark-card border border-dark-border rounded-xl p-6 mt-8 animate-in fade-in duration-500">
+                        <h2 className="text-xl font-bold mb-4 text-neon-cyan">Comparison Results</h2>
+                        <div className="grid grid-cols-2 gap-8">
+                            <div>
+                                <h3 className="text-lg mb-2">Text 1 Stats</h3>
+                                <p>Tokens: <span className="text-neon-purple text-xl">{compareResult.text1_token_count}</span></p>
+                                <p>Efficiency: {compareResult.text1_efficiency_ratio} tokens/word</p>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-[#f5c96a] shadow-[0_0_8px_#f5c96a]"></span>
-                                <span>Subword</span>
+                            <div>
+                                <h3 className="text-lg mb-2">Text 2 Stats</h3>
+                                <p>Tokens: <span className="text-neon-pink text-xl">{compareResult.text2_token_count}</span></p>
+                                <p>Efficiency: {compareResult.text2_efficiency_ratio} tokens/word</p>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-[#f56a7c] shadow-[0_0_8px_#f56a7c]"></span>
-                                <span>Punctuation</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-[#6ac8f5] shadow-[0_0_8px_#6ac8f5]"></span>
-                                <span>Special</span>
+                        </div>
+                        <div className="mt-8 border-t border-dark-border pt-4">
+                            <h3 className="text-lg mb-2">Shared Tokens (Intersection)</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {compareResult.shared_tokens.length === 0 ? <span className="text-gray-500">None</span> :
+                                    compareResult.shared_tokens.map((t, i) => (
+                                        <span key={i} className="px-2 py-1 bg-dark-bg border border-dark-border rounded text-sm text-neon-yellow">{t}</span>
+                                    ))
+                                }
                             </div>
                         </div>
                     </div>
                 )}
+
             </main>
 
-            {/* Footer */}
-            <footer className="border-t border-[#1E293B] mt-12 bg-[#020617]">
-                <div className="container mx-auto px-4 py-8 text-center text-[#94a3b8] text-sm">
-                    <p>Powered by Real Tokenizers: GPT-2 and BERT</p>
-                    <p className="mt-2 text-[#475569]">A Deep Dive into the mechanics of LLMs.</p>
-                </div>
-            </footer>
+            {/* Floating Compare Toggle */}
+            <button
+                onClick={toggleCompareMode}
+                className="fixed bottom-6 right-6 p-4 rounded-full bg-dark-card border border-dark-border shadow-lg hover:border-cyan-500 transition-colors flex items-center justify-center text-cyan-500 group"
+                title="Toggle Compare Mode"
+            >
+                <Columns className="w-6 h-6 group-hover:scale-110 transition-transform" />
+            </button>
+
         </div>
-    )
+    );
 }

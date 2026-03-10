@@ -1,94 +1,145 @@
-import { useTokenizerStore } from '@/store/tokenizerStore'
-import type { TokenInfo } from '@/types'
-
+import React, { useCallback, useState } from 'react';
+import { useTokenizerStore } from '../store/tokenizerStore';
+import { Copy, Check } from 'lucide-react';
 
 export default function TokenDisplay() {
-    const { result, selectedTokenId, selectToken } = useTokenizerStore()
+    const { result, selectedTokenId, selectToken } = useTokenizerStore();
+    const [copied, setCopied] = useState(false);
 
-    if (!result) {
-        return (
-            <div className="card text-center text-[#94a3b8]">
-                <p>Enter text and click "Tokenize" to see the token visualization</p>
-            </div>
-        )
-    }
+    // Deterministic color generation based on ID
+    // Deterministic vibrant toy color generation based on ID
+    const getColor = useCallback((id: number, type: string) => {
+        const toyColors = [
+            '#e63946', // Vibrant Red
+            '#4361ee', // Bright Blue
+            '#fca311', // Deep Yellow/Orange
+            '#06d6a0', // Mint Green
+            '#f72585', // Hot Pink
+            '#7209b7', // Purple
+            '#00f5d4'  // Neon Cyan
+        ];
+        return toyColors[(id * 17) % toyColors.length];
+    }, []);
+
+    const handleCopy = () => {
+        if (result) {
+            navigator.clipboard.writeText(JSON.stringify(result.raw_ids));
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    if (!result) return null;
 
     return (
-        <div className="card border-[#1E293B] bg-[#0F172A]">
-            <h3 className="text-sm font-bold text-[#7c6af5] uppercase tracking-widest mb-6">Token Visualization</h3>
+        <div className="w-full flex flex-col gap-4">
+            <div className="flex justify-between items-center mb-2">
+                <h2 className="text-lg font-semibold text-gray-300">Lexical Token Segmentation</h2>
+                <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-dark-bg border border-dark-border hover:border-neon-purple rounded text-sm transition-colors"
+                >
+                    {copied ? <Check className="w-4 h-4 text-neon-green" /> : <Copy className="w-4 h-4" />}
+                    {copied ? 'Copied' : 'Copy All IDs'}
+                </button>
+            </div>
 
-            <div className="flex flex-wrap gap-2 mb-8 font-mono">
-                {result.tokens.map((token, idx) => {
-                    // Match token typings to the tailwind token colors
-                    const typeColors: Record<string, string> = {
-                        word: '#7c6af5',
-                        subword: '#f5c96a',
-                        punctuation: '#f56a7c',
-                        special: '#6ac8f5',
-                        number: '#6af5a0'
-                    };
-                    const tc = typeColors[token.type] || '#888';
+            <div className="mb-4 p-4 border border-blue-500/30 bg-blue-500/10 rounded-lg text-blue-200 text-sm leading-relaxed">
+                <h3 className="font-bold flex items-center gap-2 mb-1 text-blue-400">
+                    <span className="text-xl">💡</span> The LEGO Pieces
+                </h3>
+                <p>
+                    See how your words got broken into colored blocks? Some big, common words get to stay together as one big LEGO piece. But tricky or long words get chopped into smaller pieces so the robot can understand them easier! Try hovering over a piece to see its secrets.
+                </p>
+            </div>
+
+            <div className="flex flex-wrap gap-x-2 gap-y-8 text-lg items-end mt-8 p-4">
+                {result.tokens.map((token, i) => {
                     const isSelected = selectedTokenId === token.id;
+                    const color = getColor(token.id, token.type);
+
+                    // Add a tiny bit of scatter/rotation for the messy playroom aesthetic
+                    const rotations = ['-rotate-2', '-rotate-1', 'rotate-0', 'rotate-1', 'rotate-2'];
+                    const scatterRot = isSelected ? 'rotate-0' : rotations[(i * 3) % rotations.length];
+
+                    // Determine how many studs based on word length
+                    const nStuds = Math.max(2, Math.min(4, Math.ceil(token.display.length / 3)));
 
                     return (
-                        <span
-                            key={`${token.id}-${idx}`}
-                            onClick={() => selectToken(isSelected ? null : token.id)}
-                            className={`
-                                inline-flex flex-col items-center px-2.5 py-1 rounded-[6px] border border-transparent cursor-pointer 
-                                transition-all duration-150 hover:-translate-y-0.5 min-w-[28px]
-                                ${isSelected ? 'ring-2 ring-white scale-105 z-10' : ''}
+                        <div
+                            key={`${token.id}-${i}`}
+                            onClick={() => selectToken(token.id)}
+                            className={`group relative flex flex-col items-center justify-center px-4 py-3 cursor-pointer transition-all duration-300 rounded-lg ${scatterRot}
+                                ${isSelected ? 'z-30 -translate-y-4 scale-110 shadow-[0_20px_40px_rgba(0,0,0,0.8)]' : 'hover:-translate-y-2 hover:shadow-2xl hover:z-20 shadow-[0_10px_20px_rgba(0,0,0,0.6)]'}
                             `}
                             style={{
-                                backgroundColor: `${tc}20`,
-                                borderColor: `${tc}60`,
-                                color: tc,
-                                boxShadow: isSelected ? `0 0 12px ${tc}80` : 'none'
+                                backgroundColor: color,
+                                borderBottom: `8px solid rgba(0,0,0,0.4)`, // Thick 3D base
+                                borderRight: `4px solid rgba(0,0,0,0.3)`,
+                                borderLeft: `2px solid rgba(255,255,255,0.3)`,
+                                borderTop: `2px solid rgba(255,255,255,0.4)`,
+                                boxShadow: `inset 0 10px 20px rgba(255,255,255,0.3), inset 0 -5px 10px rgba(0,0,0,0.2), 0 15px 25px rgba(0,0,0,0.6)`
                             }}
-                            title={`Token: "${token.display}" | ID: ${token.id} | Type: ${token.type} | Freq: ${token.frequency}x`}
                         >
-                            <span className="text-[0.88rem] font-semibold whitespace-pre">
+                            {/* Realistic LEGO Stud Tops */}
+                            <div className="absolute -top-[10px] left-0 right-0 flex justify-evenly px-2 gap-1 pointer-events-none">
+                                {Array.from({ length: nStuds }).map((_, idx) => (
+                                    <div
+                                        key={`stud-${idx}`}
+                                        className="w-5 h-3 rounded-full"
+                                        style={{
+                                            backgroundColor: color,
+                                            borderTop: '2px solid rgba(255,255,255,0.6)',
+                                            borderLeft: '2px solid rgba(255,255,255,0.3)',
+                                            borderRight: '2px solid rgba(0,0,0,0.4)',
+                                            borderBottom: '1px solid rgba(0,0,0,0.2)',
+                                            boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), 0 -2px 5px rgba(0,0,0,0.2)'
+                                        }}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Text "Engraved" into plastic */}
+                            <span
+                                className="font-mono font-black whitespace-pre z-10 text-white tracking-widest text-lg md:text-xl"
+                                style={{
+                                    textShadow: '0 -1px 1px rgba(0,0,0,0.6), 0 1px 1px rgba(255,255,255,0.4)'
+                                }}
+                            >
                                 {token.display.replace(/ /g, '·')}
                             </span>
-                            <span className="text-[0.58rem] opacity-70 mt-0.5">
-                                {token.id}
+
+                            {/* Sticker/Label for ID */}
+                            <span className="text-[10px] text-black font-mono mt-2 bg-white/90 px-2 py-0.5 rounded-sm shadow-sm border border-black/10 tracking-widest transform rotate-1">
+                                ID:{token.id}
                             </span>
-                        </span>
-                    )
+
+                            {/* Toy Feature Tooltip (Sci-Fi Hologram style) */}
+                            <div className="absolute bottom-[130%] mb-2 hidden group-hover:block z-50 w-max max-w-[220px] p-4 bg-[#0a0f18]/95 border-2 border-neon-cyan/50 rounded-xl shadow-[0_0_30px_rgba(0,255,255,0.3)] backdrop-blur-md text-xs text-left transform pointer-events-none transition-all">
+                                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-[#0a0f18] border-b-2 border-r-2 border-neon-cyan/50 rotate-45"></div>
+                                <h4 className="text-neon-cyan font-mono font-bold uppercase tracking-widest mb-2 border-b border-neon-cyan/30 pb-1">Block Scanner Data</h4>
+                                <p className="mb-2"><span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider">Raw Text Value</span> <span className="font-mono text-white text-base">"{token.text}"</span></p>
+                                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-white/10">
+                                    <div>
+                                        <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider">Vault ID</span>
+                                        <span className="text-neon-pink font-mono font-bold text-base bg-neon-pink/10 px-1 rounded">{token.id}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider">Usage</span>
+                                        <span className="text-neon-yellow font-mono font-bold text-base">{token.frequency}x</span>
+                                    </div>
+                                </div>
+                                <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between">
+                                    <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Component Type</span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-black ${token.type === 'subword' ? 'bg-neon-yellow' : 'bg-neon-green'}`}>
+                                        {token.type === 'subword' ? '🧩 SNAP-ON' : '📦 WHOLE'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    );
                 })}
             </div>
-
-            <div className="border-t border-[#1E293B] pt-4">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                    <div className="bg-[#12122a] p-3 rounded-lg border border-[#1e1e3a]">
-                        <span className="text-[#94a3b8] block text-[0.7rem] uppercase tracking-wider mb-1">Total Tokens</span>
-                        <span className="font-bold text-[#e0e0e0] text-lg">{result.total_tokens}</span>
-                    </div>
-                    <div className="bg-[#12122a] p-3 rounded-lg border border-[#1e1e3a]">
-                        <span className="text-[#94a3b8] block text-[0.7rem] uppercase tracking-wider mb-1">Unique</span>
-                        <span className="font-bold text-[#e0e0e0] text-lg">{result.unique_tokens}</span>
-                    </div>
-                    <div className="bg-[#12122a] p-3 rounded-lg border border-[#1e1e3a]">
-                        <span className="text-[#94a3b8] block text-[0.7rem] uppercase tracking-wider mb-1">Reuse Rate</span>
-                        <span className="font-bold text-[#e0e0e0] text-lg">{(result.reuse_rate * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="bg-[#12122a] p-3 rounded-lg border border-[#1e1e3a]">
-                        <span className="text-[#94a3b8] block text-[0.7rem] uppercase tracking-wider mb-1">Selected ID</span>
-                        <span className="font-bold text-[#7c6af5] text-lg">
-                            {selectedTokenId !== null ? `#${selectedTokenId}` : 'None'}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="info-box mt-6">
-                <strong>💡 Tips:</strong>
-                <ul className="list-disc list-inside space-y-1 mt-2">
-                    <li>Click any token to highlight all instances of that token ID</li>
-                    <li>Hover over tokens to see detailed information</li>
-                    <li>Colors are consistent for the same token type across the text</li>
-                </ul>
-            </div>
         </div>
-    )
+    );
 }
