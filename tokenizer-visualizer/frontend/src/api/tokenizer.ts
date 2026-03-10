@@ -1,45 +1,51 @@
-import axios from 'axios'
-import type { TokenizeRequest, TokenizeResponse } from '@/types'
+import axios, { AxiosError } from 'axios';
+import {
+    TokenizeRequest, TokenizeResponse, ErrorResponse,
+    CompareRequest, CompareResponse, AttentionRequest, AttentionResponse
+} from '../types';
 
 const api = axios.create({
     baseURL: '/api',
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 30000, // 30 seconds
-})
+});
 
-// Add response interceptor for error handling
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
-        if (error.response) {
-            // Server responded with error status
-            const message = error.response.data?.detail || error.response.statusText
-            throw new Error(`API Error: ${message}`)
-        } else if (error.request) {
-            // Request made but no response
-            throw new Error('No response from server. Is the backend running?')
-        } else {
-            // Something else happened
-            throw new Error(`Request failed: ${error.message}`)
+    (error: AxiosError<ErrorResponse>) => {
+        if (error.response?.data?.detail) {
+            return Promise.reject(new Error(error.response.data.detail));
         }
+        return Promise.reject(error);
     }
-)
+);
 
-export const tokenizeText = async (
-    request: TokenizeRequest
-): Promise<TokenizeResponse> => {
-    const response = await api.post<TokenizeResponse>('/tokenize', request)
-    return response.data
-}
+export const tokenizeText = async (data: TokenizeRequest): Promise<TokenizeResponse> => {
+    const response = await api.post<TokenizeResponse>('/tokenize', data);
+    return response.data;
+};
 
-export const getModels = async (): Promise<{ models: string[] }> => {
-    const response = await api.get('/models')
-    return response.data
-}
+export const getModels = async (): Promise<string[]> => {
+    const response = await axios.get<{ models: string[] }>('/models');
+    return response.data.models;
+};
 
 export const healthCheck = async (): Promise<{ status: string }> => {
-    const response = await api.get('/health')
-    return response.data
-}
+    const response = await axios.get<{ status: string }>('/health');
+    return response.data;
+};
+
+export const compareTexts = async (
+    text1: string,
+    text2: string,
+    model: TokenizeRequest['model']
+): Promise<CompareResponse> => {
+    const response = await api.post<CompareResponse>('/compare', { text1, text2, model });
+    return response.data;
+};
+
+export const getAttention = async (text: string): Promise<AttentionResponse> => {
+    const response = await api.post<AttentionResponse>('/attention', { text, model: 'bert-base-uncased' });
+    return response.data;
+};

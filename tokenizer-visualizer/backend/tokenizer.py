@@ -1,5 +1,6 @@
 import re
 import string
+import tiktoken
 from typing import List, Tuple, Dict, Any
 from transformers import GPT2Tokenizer, BertTokenizer
 from models import TokenInfo, BPEStep
@@ -8,12 +9,15 @@ class TokenizerService:
     def __init__(self):
         self.gpt2_tokenizer = None
         self.bert_tokenizer = None
+        self.tiktoken_encoder = None
 
     def preload_models(self):
         if self.gpt2_tokenizer is None:
             self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         if self.bert_tokenizer is None:
             self.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        if self.tiktoken_encoder is None:
+            self.tiktoken_encoder = tiktoken.get_encoding("cl100k_base")
 
     def get_tokenizer(self, model_name: str):
         if model_name == "gpt2":
@@ -24,6 +28,10 @@ class TokenizerService:
             if not self.bert_tokenizer:
                 self.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
             return self.bert_tokenizer
+        elif model_name == "gpt4":
+            if not self.tiktoken_encoder:
+                self.tiktoken_encoder = tiktoken.get_encoding("cl100k_base")
+            return self.tiktoken_encoder
         raise ValueError(f"Unknown model: {model_name}")
 
 # Singleton instance
@@ -41,7 +49,7 @@ def get_token_type(token_text: str, position: int, model_name: str) -> str:
         if position == 0:
             return "word"
         return "subword"
-    else:  # Bert
+    elif model_name == "bert-base-uncased":
         if token_text in ["[CLS]", "[SEP]", "[PAD]", "[UNK]", "[MASK]"]:
             return "special"
         if token_text.startswith("##"):
@@ -49,6 +57,13 @@ def get_token_type(token_text: str, position: int, model_name: str) -> str:
         if not token_text.strip(string.punctuation):
             return "punctuation"
         return "word"
+    else:  # gpt4
+        if not token_text.strip(string.punctuation):
+            return "punctuation"
+        # tiktoken decoder outputs string. Spaces usually start with " "
+        if token_text.startswith(" ") or token_text.startswith("\n") or position == 0:
+            return "word"
+        return "subword"
 
 
 def get_display_text(token_text: str, model_name: str) -> str:
@@ -165,8 +180,21 @@ def simulate_bpe_steps(text: str, tokenizer: GPT2Tokenizer) -> List[BPEStep]:
 def tokenize_process(text: str, model_name: str, include_bpe: bool = True) -> Tuple[List[TokenInfo], List[int], int, List[BPEStep]]:
     tokenizer = tokenizer_service.get_tokenizer(model_name)
     
-    raw_ids = tokenizer.encode(text, add_special_tokens=True)
-    raw_tokens = tokenizer.convert_ids_to_tokens(raw_ids)
+    if model_name == "gpt4":
+        raw_ids = tokenizer.encode(text, allowed_special="all")
+        raw_tokens = []
+        for tid in raw_ids:
+            try:
+                # Decodes single token
+                t_bytes = tokenizer.decode_single_token_bytes(tid)
+                raw_tokens.append(t_bytes.decode('utf-8', errors='replace'))
+            except Exception:
+                raw_tokens.append(tokenizer.decode([tid]))
+        vocab_size = tokenizer.n_vocab
+    else:
+        raw_ids = tokenizer.encode(text, add_special_tokens=True)
+        raw_tokens = tokenizer.convert_ids_to_tokens(raw_ids)
+        vocab_size = tokenizer.vocab_size
     
     # Calculate Frequency
     freq_map = {}
@@ -202,5 +230,5 @@ def tokenize_process(text: str, model_name: str, include_bpe: bool = True) -> Tu
     if include_bpe and model_name == "gpt2":
         bpe_steps = simulate_bpe_steps(text, tokenizer)
         
-    return token_infos, raw_ids, tokenizer.vocab_size, bpe_steps
+    return token_infos, raw_ids, vocab_size, bpe_steps
 

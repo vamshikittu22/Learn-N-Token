@@ -1,59 +1,44 @@
-import { Activity, Hash, Layers, Percent, Clock } from 'lucide-react'
-import type { TokenizeResponse } from '@/types'
+import React from 'react';
+import { useTokenizerStore } from '../store/tokenizerStore';
 
-interface StatsBarProps {
-    result: TokenizeResponse
-}
+export default function StatsBar() {
+    const { result, input } = useTokenizerStore();
 
-export default function StatsBar({ result }: StatsBarProps) {
+    if (!result) return null;
+
+    const words = Math.max(1, result.tokens.filter(t => t.type === 'word').length);
+    const isSingleChar = input.trim().length <= 1;
+    const ratio = isSingleChar ? 'N/A' : (result.total_tokens / words).toFixed(2);
+    const reusedIDs = result.total_tokens - result.unique_tokens;
+
     const stats = [
-        {
-            icon: Hash,
-            label: 'Total Tokens',
-            value: result.total_tokens.toLocaleString(),
-            color: 'text-[#7c6af5]',
-        },
-        {
-            icon: Layers,
-            label: 'Unique Tokens',
-            value: result.unique_tokens.toLocaleString(),
-            color: 'text-[#f56a9a]',
-        },
-        {
-            icon: Percent,
-            label: 'Reuse Rate',
-            value: `${(result.reuse_rate * 100).toFixed(1)}%`,
-            color: 'text-[#6af5a0]',
-        },
-        {
-            icon: Activity,
-            label: 'Vocab Size',
-            value: result.vocab_size.toLocaleString(),
-            color: 'text-[#f5c96a]',
-        },
-        {
-            icon: Clock,
-            label: 'Processing Time',
-            value: `${result.processing_time_ms.toFixed(1)}ms`,
-            color: 'text-[#6ac8f5]',
-        },
-    ]
+        { label: 'Total Tokens', value: result.total_tokens, help: 'Total number of tokens generated from the input text.' },
+        { label: 'Unique Tokens', value: result.unique_tokens, help: 'Number of distinct token IDs in the sequence.' },
+        { label: 'Words (Est)', value: isSingleChar ? (input.trim().length === 1 ? 1 : 0) : words, help: 'Estimated number of real words.' },
+        { label: 'Token/Word', value: ratio, help: 'Average number of tokens used per word. Lower is more efficient.' },
+        { label: 'Reused IDs', value: reusedIDs, help: 'How many times the tokenizer used a token ID more than once.' },
+        { label: 'Reuse Rate %', value: (result.reuse_rate * 100).toFixed(1) + '%', help: 'Percentage of the token sequence made up of repeated tokens.' },
+        { label: 'Vocab Size', value: result.vocab_size.toLocaleString(), help: 'Total number of tokens this specific model knows.' }
+    ];
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {stats.map((stat) => {
-                const Icon = stat.icon
-                return (
-                    <div key={stat.label} className="card border-[#1E293B] bg-[#0F172A] p-5 flex flex-col justify-center items-center text-center">
-                        <div className="text-3xl font-extrabold mb-1 tracking-tight" style={{ color: stat.color.replace('text-[', '').replace(']', '') }}>
-                            {stat.value}
+        <div className="relative w-full">
+            <div className="absolute -top-4 right-0 bg-dark-card border border-dark-border px-3 py-1 rounded-full text-xs text-neon-green">
+                {result.processing_time_ms.toFixed(0)} ms
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                {stats.map((s, i) => (
+                    <div key={i} title={s.help} className="bg-dark-card border border-dark-border rounded-lg p-4 flex flex-col items-center justify-center hover:border-neon-purple transition-colors cursor-help">
+                        <div className="text-2xl font-bold font-mono text-neon-purple mb-1">
+                            {s.value}
                         </div>
-                        <div className="text-[0.65rem] uppercase tracking-[1.5px] text-[#555] font-semibold flex items-center justify-center gap-1.5 mt-1">
-                            {stat.label}
+                        <div className="flex items-center gap-1 text-[10px] sm:text-xs uppercase tracking-wider text-gray-500 font-semibold text-center mt-1">
+                            {s.label}
+                            <span className="text-[9px] bg-gray-800 rounded-full w-3.5 h-3.5 flex items-center justify-center text-gray-400">?</span>
                         </div>
                     </div>
-                )
-            })}
+                ))}
+            </div>
         </div>
-    )
+    );
 }

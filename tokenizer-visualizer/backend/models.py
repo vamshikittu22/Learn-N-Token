@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Tuple, Tuple
+from typing import List, Optional, Literal, Tuple, Dict
 
 # All request/response types must be strictly typed
 class TokenizeRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000)
-    model: Literal["gpt2", "bert-base-uncased"] = "gpt2"
+    model: Literal["gpt2", "bert-base-uncased", "gpt4"] = "gpt2"
     include_embeddings: bool = False
     include_bpe_steps: bool = True
 
@@ -41,15 +41,16 @@ class TokenizeResponse(BaseModel):
     embeddings: Optional[List[EmbeddingInfo]] = None
     model_used: str
     processing_time_ms: float
+    context_window_usage: Optional[Dict[str, float]] = None
 
 class ErrorResponse(BaseModel):
-    error: str          # Short error category e.g. "validation_error", "rate_limit_exceeded"
-    detail: str         # Human-readable description
-    status_code: int    # HTTP status code
+    status_code: int
+    message: str
+    detail: str
 
 
 class AttentionRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=100)  # 100-char limit enforced
+    text: str = Field(..., min_length=1, max_length=100)
     model: Literal["bert-base-uncased"] = "bert-base-uncased"
 
 
@@ -64,14 +65,20 @@ class AttentionResponse(BaseModel):
 class CompareRequest(BaseModel):
     text1: str = Field(..., min_length=1, max_length=2000)
     text2: str = Field(..., min_length=1, max_length=2000)
-    model: Literal["gpt2", "bert-base-uncased"] = "gpt2"
+    model: Literal["gpt2", "bert-base-uncased", "gpt4"] = "gpt2"
 
 
 class CompareResponse(BaseModel):
+    text1_tokens: List[str]
+    text2_tokens: List[str]
+    text1_ids: List[int]
+    text2_ids: List[int]
     text1_token_count: int
     text2_token_count: int
     shared_tokens: List[str]
-    text1_unique_tokens: List[str]
-    text2_unique_tokens: List[str]
+    text1_efficiency_ratio: float
+    text2_efficiency_ratio: float
+    context_window_usage: Dict[str, float]
     model_used: str
     processing_time_ms: float
+

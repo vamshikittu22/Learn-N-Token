@@ -1,0 +1,38 @@
+version: "3.8"
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - CORS_ORIGINS=http://localhost,http://localhost:5173
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=info
+      - HF_HOME=/model-cache
+    volumes:
+      - model-cache:/model-cache
+    networks:
+      - tokenizer-net
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - tokenizer-net
+
+networks:
+  tokenizer-net:
+    name: tokenizer-net
+
+volumes:
+  model-cache:

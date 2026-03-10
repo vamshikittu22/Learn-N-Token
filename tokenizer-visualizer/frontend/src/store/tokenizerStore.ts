@@ -1,32 +1,31 @@
-import { create } from 'zustand'
-import { tokenizeText } from '@/api/tokenizer'
-import type { TokenizeResponse, TabType } from '@/types'
+import { create } from 'zustand';
+import { TokenizeResponse, ModelSelection, TabType, CompareResponse } from '../types';
+import { tokenizeText, compareTexts } from '../api/tokenizer';
 
 interface TokenizerState {
-    // Input state
-    input: string
-    model: 'gpt2' | 'bert-base-uncased'
+    input: string;
+    model: ModelSelection;
+    result: TokenizeResponse | null;
+    loading: boolean;
+    error: string | null;
+    selectedTokenId: number | null;
+    activeTab: TabType;
+    compareMode: boolean;
+    compareInput: string;
+    compareResult: CompareResponse | null;
 
-    // Response state
-    result: TokenizeResponse | null
-    loading: boolean
-    error: string | null
-
-    // UI state
-    selectedTokenId: number | null
-    activeTab: TabType
-
-    // Actions
-    setInput: (value: string) => void
-    setModel: (model: 'gpt2' | 'bert-base-uncased') => void
-    setActiveTab: (tab: TabType) => void
-    selectToken: (id: number | null) => void
-    tokenize: () => Promise<void>
-    reset: () => void
+    setInput: (text: string) => void;
+    setModel: (model: ModelSelection) => void;
+    setActiveTab: (tab: TabType) => void;
+    selectToken: (id: number | null) => void;
+    tokenize: () => Promise<void>;
+    reset: () => void;
+    toggleCompareMode: () => void;
+    setCompareInput: (text: string) => void;
+    runComparison: () => Promise<void>;
 }
 
 export const useTokenizerStore = create<TokenizerState>((set, get) => ({
-    // Initial state
     input: '',
     model: 'gpt2',
     result: null,
@@ -34,51 +33,54 @@ export const useTokenizerStore = create<TokenizerState>((set, get) => ({
     error: null,
     selectedTokenId: null,
     activeTab: 'tokens',
+    compareMode: false,
+    compareInput: '',
+    compareResult: null,
 
-    // Actions
-    setInput: (value) => set({ input: value, error: null }),
-
+    setInput: (text) => set({ input: text }),
     setModel: (model) => set({ model }),
-
     setActiveTab: (tab) => set({ activeTab: tab }),
-
-    selectToken: (id) => set({ selectedTokenId: id }),
+    selectToken: (id) => set((state) => ({
+        selectedTokenId: state.selectedTokenId === id ? null : id
+    })),
 
     tokenize: async () => {
-        const { input, model } = get()
+        const { input, model } = get();
+        if (!input.trim()) return;
 
-        if (!input.trim()) {
-            set({ error: 'Please enter some text to tokenize' })
-            return
-        }
-
-        if (input.length > 2000) {
-            set({ error: 'Text is too long. Maximum 2000 characters allowed.' })
-            return
-        }
-
-        set({ loading: true, error: null })
-
+        set({ loading: true, error: null, result: null, selectedTokenId: null });
         try {
-            const result = await tokenizeText({
+            const res = await tokenizeText({
                 text: input,
                 model,
-                include_embeddings: true,
                 include_bpe_steps: true,
-            })
-
-            set({ result, loading: false, selectedTokenId: null })
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Failed to tokenize text'
-            set({ error: errorMessage, loading: false })
+                include_embeddings: true
+            });
+            set({ result: res, loading: false });
+        } catch (err: any) {
+            set({ error: err.message || 'Failed to tokenize text', loading: false });
         }
     },
 
     reset: () => set({
-        input: '',
-        result: null,
-        error: null,
-        selectedTokenId: null,
-        activeTab: 'tokens',
+        input: '', result: null, error: null,
+        selectedTokenId: null, compareInput: '', compareResult: null
     }),
-}))
+
+    toggleCompareMode: () => set((state) => ({ compareMode: !state.compareMode })),
+
+    setCompareInput: (text) => set({ compareInput: text }),
+
+    runComparison: async () => {
+        const { input, compareInput, model } = get();
+        if (!input.trim() || !compareInput.trim()) return;
+
+        set({ loading: true, error: null, compareResult: null });
+        try {
+            const res = await compareTexts(input, compareInput, model);
+            set({ compareResult: res, loading: false });
+        } catch (err: any) {
+            set({ error: err.message || 'Failed to compare texts', loading: false });
+        }
+    }
+}));

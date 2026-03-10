@@ -29,7 +29,18 @@ def sanitize_input(text: str) -> str:
 
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="FAANG Tokenizer Visualizer API")
+app = FastAPI(
+    title="FAANG Tokenizer Visualizer API",
+    description="A high-performance LLM Tokenizer Visualizer backend supporting GPT-2, BERT, and GPT-4 (tiktoken).",
+    version="0.2.0",
+    contact={
+        "name": "FAANG Engineer",
+        "url": "https://github.com/vamshikittu22",
+    },
+    license_info={
+        "name": "MIT",
+    }
+)
 app.state.limiter = limiter
 
 # Setup CORS for Vite UI
@@ -57,7 +68,7 @@ async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded)
     return JSONResponse(
         status_code=429,
         content=ErrorResponse(
-            error="rate_limit_exceeded",
+            message="rate_limit_exceeded",
             detail="Rate limit exceeded: 30 per minute. Please wait before retrying.",
             status_code=429
         ).model_dump()
@@ -70,7 +81,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content=ErrorResponse(
-            error=_status_to_error_type(exc.status_code),
+            message=_status_to_error_type(exc.status_code),
             detail=str(exc.detail),
             status_code=exc.status_code
         ).model_dump()
@@ -82,7 +93,7 @@ async def request_validation_exception_handler(request: Request, exc: RequestVal
     return JSONResponse(
         status_code=422,
         content=ErrorResponse(
-            error="validation_error",
+            message="validation_error",
             detail=str(exc),
             status_code=422
         ).model_dump()
@@ -94,9 +105,21 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
     return JSONResponse(
         status_code=422,
         content=ErrorResponse(
-            error="validation_error",
+            message="validation_error",
             detail=str(exc),
             status_code=422
+        ).model_dump()
+    )
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    return JSONResponse(
+        status_code=400,
+        content=ErrorResponse(
+            message="value_error",
+            detail=str(exc),
+            status_code=400
         ).model_dump()
     )
 
@@ -106,7 +129,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
-            error="internal_error",
+            message="internal_error",
             detail=f"Internal server error: {str(exc)}",
             status_code=500
         ).model_dump()
@@ -129,15 +152,15 @@ async def startup_event():
     attention_service.preload_model()
     print("Models preloaded into memory on startup.")
 
-@app.get("/health")
+@app.get("/health", summary="Health Check", description="Returns standard application health status.", response_description="Status ok message.", tags=["System"])
 def health_check():
     return {"status": "ok"}
 
-@app.get("/models")
+@app.get("/models", summary="List Supported Models", description="Returns a list of all currently supported tokenizer models.", response_description="List of model strings.", tags=["System"])
 def list_models():
     return {"models": settings.supported_models}
 
-@app.post("/api/tokenize", response_model=TokenizeResponse)
+@app.post("/api/tokenize", summary="Tokenize Text", description="Tokenize input text using the specified model.", response_description="Full tokenization details including tokens, BPE steps, and context usage.", tags=["Tokenizer"], response_model=TokenizeResponse)
 @limiter.limit("30/minute")
 async def tokenize(request: Request, req: TokenizeRequest):
     # Sanitize input
@@ -166,6 +189,16 @@ async def tokenize(request: Request, req: TokenizeRequest):
         if unique_tokens > 0:
             reuse_rate = round((total_tokens - unique_tokens) / total_tokens, 4)
             
+        
+        # Calculate Context Window Usage
+        context_window_usage = {
+            "gpt2": round((total_tokens / 1024) * 100, 4),
+            "gpt35": round((total_tokens / 4096) * 100, 4),
+            "gpt4": round((total_tokens / 8192) * 100, 4),
+            "gpt4_32k": round((total_tokens / 32768) * 100, 4),
+            "llama3": round((total_tokens / 131072) * 100, 4),
+        }
+
         return TokenizeResponse(
             tokens=tokens,
             raw_ids=raw_ids,
@@ -176,13 +209,14 @@ async def tokenize(request: Request, req: TokenizeRequest):
             bpe_steps=bpe_steps if req.include_bpe_steps else None,
             embeddings=embeddings_info,
             model_used=req.model,
-            processing_time_ms=end_ms - start_ms
+            processing_time_ms=end_ms - start_ms,
+            context_window_usage=context_window_usage
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model Processing Error: {str(e)}")
 
 
-@app.post("/api/attention", response_model=AttentionResponse)
+@app.post("/api/attention", summary="Extract Attention Weights", description="Gets real layer 6 attention weights from BERT for visualization.", response_description="Attention tokens and adjacency matrix.", tags=["Transformers"], response_model=AttentionResponse)
 @limiter.limit("30/minute")
 async def attention(request: Request, req: AttentionRequest):
     """Extract BERT attention weights for the given text."""
@@ -207,7 +241,7 @@ async def attention(request: Request, req: AttentionRequest):
         raise HTTPException(status_code=500, detail=f"Attention Extraction Error: {str(e)}")
 
 
-@app.post("/api/compare", response_model=CompareResponse)
+@app.post("/api/compare", summary="Compare Tokenization", description="Tokenizes two texts and compares their tokens and context window usage.", response_description="Comparison metrics including tokens, intersection, and efficiency.", tags=["Tokenizer"], response_model=CompareResponse)
 @limiter.limit("30/minute")
 async def compare(request: Request, req: CompareRequest):
     """Compare tokenization of two texts."""
@@ -224,26 +258,48 @@ async def compare(request: Request, req: CompareRequest):
         start_ms = time.time() * 1000
         
         # Tokenize both texts using existing tokenize_process
-        tokens1, _, _, _ = tokenize_process(clean_text1, req.model, False)
-        tokens2, _, _, _ = tokenize_process(clean_text2, req.model, False)
+        tokens1, raw_ids1, _, _ = tokenize_process(clean_text1, req.model, False)
+        tokens2, raw_ids2, _, _ = tokenize_process(clean_text2, req.model, False)
+        
+        text1_tokens_str = [t.text for t in tokens1]
+        text2_tokens_str = [t.text for t in tokens2]
         
         # Extract token text sets
-        set1 = set(t.text for t in tokens1)
-        set2 = set(t.text for t in tokens2)
+        set1 = set(text1_tokens_str)
+        set2 = set(text2_tokens_str)
         
-        # Compute shared and unique tokens
-        shared_tokens = sorted(set1 & set2)
-        text1_unique_tokens = sorted(set1 - set2)
-        text2_unique_tokens = sorted(set2 - set1)
+        # Compute shared tokens
+        shared_tokens = sorted(list(set1 & set2))
+        
+        # Efficiency Ratio (tokens per word)
+        # simplistic word count by split
+        word_count1 = max(1, len(clean_text1.split()))
+        word_count2 = max(1, len(clean_text2.split()))
+        
+        t1_count = len(raw_ids1)
+        t2_count = len(raw_ids2)
+        
+        t1_efficiency = round(t1_count / word_count1, 3)
+        t2_efficiency = round(t2_count / word_count2, 3)
+        
+        context_window_usage = {
+            "text1": round((t1_count / 4096) * 100, 4),
+            "text2": round((t2_count / 4096) * 100, 4),
+        }
         
         end_ms = time.time() * 1000
         
         return CompareResponse(
-            text1_token_count=len(tokens1),
-            text2_token_count=len(tokens2),
+            text1_tokens=text1_tokens_str,
+            text2_tokens=text2_tokens_str,
+            text1_ids=raw_ids1,
+            text2_ids=raw_ids2,
+            text1_token_count=t1_count,
+            text2_token_count=t2_count,
             shared_tokens=shared_tokens,
-            text1_unique_tokens=text1_unique_tokens,
-            text2_unique_tokens=text2_unique_tokens,
+            text1_efficiency_ratio=t1_efficiency,
+            text2_efficiency_ratio=t2_efficiency,
+            context_window_usage=context_window_usage,
             model_used=req.model,
             processing_time_ms=end_ms - start_ms
         )
